@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
   Dimensions
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -168,6 +168,7 @@ const ALL_CATALOG_PRODUCTS = [
 export default function ProductDetailScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
+  const insets = useSafeAreaInsets();
   const { colors, isDarkMode } = useTheme();
   const { language } = useLanguage();
   const { addToCart, cartCount } = useCart();
@@ -768,7 +769,14 @@ export default function ProductDetailScreen() {
       </ScrollView>
 
       {/* Bottom Action Bar */}
-      <View style={[styles.bottomBar, { backgroundColor: isDarkMode ? colors.card : '#ffffff', borderTopColor: isDarkMode ? colors.border : '#e2eae5' }]}>
+      <View style={[
+        styles.bottomBar, 
+        { 
+          backgroundColor: isDarkMode ? colors.card : '#ffffff', 
+          borderTopColor: isDarkMode ? colors.border : '#e2eae5',
+          paddingBottom: Math.max(insets.bottom + 8, 20)
+        }
+      ]}>
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 11, color: colors.secondaryText, fontWeight: '600' }}>
             {language === 'ne' ? 'कुल मूल्य' : 'Total Price'}
