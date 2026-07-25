@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Avani Marketplace Media Drive & Image Scraper Studio</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="styles.css?v=3">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="brand-icon"><i class="fa-solid fa-leaf"></i></div>
+                <div class="brand-text">
+                    <h2>Avani Media</h2>
+                    <span>Drive & Scraper Studio</span>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="section-title">DRIVE FOLDERS</div>
+                <ul class="nav-menu">
+                    <li class="nav-item active" data-category="ALL">
+                        <i class="fa-solid fa-folder"></i>
+                        <span>All Products</span>
+                        <span class="badge" id="count-all">75</span>
+                    </li>
+                    <li class="nav-item" data-category="Seeds">
+                        <i class="fa-solid fa-wheat-awn"></i>
+                        <span>Seeds & Crops</span>
+                        <span class="badge" id="count-seeds">20</span>
+                    </li>
+                    <li class="nav-item" data-category="Fertilizer">
+                        <i class="fa-solid fa-flask-vial"></i>
+                        <span>Fertilizers</span>
+                        <span class="badge" id="count-fertilizer">20</span>
+                    </li>
+                    <li class="nav-item" data-category="Tools">
+                        <i class="fa-solid fa-screwdriver-wrench"></i>
+                        <span>Tools & Equipment</span>
+                        <span class="badge" id="count-tools">19</span>
+                    </li>
+                    <li class="nav-item" data-category="Pesticides">
+                        <i class="fa-solid fa-shield-virus"></i>
+                        <span>Pesticides</span>
+                        <span class="badge" id="count-pesticides">11</span>
+                    </li>
+                    <li class="nav-item" data-category="Other">
+                        <i class="fa-solid fa-boxes-stacked"></i>
+                        <span>Other Equipment</span>
+                        <span class="badge" id="count-other">5</span>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="section-title">INTEGRATIONS</div>
+                <div class="integration-card" id="cloudinary-status-card">
+                    <div class="int-header">
+                        <i class="fa-solid fa-cloud-arrow-up cloud-icon"></i>
+                        <div>
+                            <div class="int-title">Cloudinary Storage</div>
+                            <div class="int-status" id="cloudinary-status-text">Not Configured (Using Direct URLs)</div>
+                        </div>
+                    </div>
+                    <button class="btn btn-sm btn-secondary" onclick="openCloudinaryModal()">
+                        <i class="fa-solid fa-gear"></i> Configure
+                    </button>
+                </div>
+            </div>
+
+            <div class="sidebar-footer">
+                <div class="db-indicator">
+                    <span class="status-dot online"></span>
+                    <span>Supabase Connected</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Header Bar -->
+            <header class="top-header">
+                <div class="search-box">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input type="text" id="search-input" placeholder="Search 75 seeds, fertilizers, tools by name or description...">
+                </div>
+
+                <div class="header-actions">
+                    <button class="btn btn-outline" onclick="triggerBatchScrape()">
+                        <i class="fa-solid fa-spider"></i> Scrape All Candidates
+                    </button>
+                    <button class="btn btn-primary" id="btn-submit-all" onclick="submitSelectedImages()">
+                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                        <span>Upload & Sync (<span id="selected-counter">0</span>)</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Action & Filter Bar -->
+            <div class="controls-bar">
+                <div class="view-title-group">
+                    <h1 id="current-folder-title">All Marketplace Products</h1>
+                    <span class="subtitle" id="current-folder-subtitle">Showing all 75 items from database</span>
+                </div>
+
+                <div class="filter-controls">
+                    <div class="select-all-box">
+                        <input type="checkbox" id="chk-select-all" onchange="toggleSelectAll(this.checked)">
+                        <label for="chk-select-all">Select All Visible</label>
+                    </div>
+
+                    <div class="filter-pills">
+                        <button class="pill active" data-filter="all">All</button>
+                        <button class="pill" data-filter="customized">Has New Image</button>
+                        <button class="pill" data-filter="pending">Pending Review</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Products Drive Grid -->
+            <div class="drive-grid" id="drive-grid">
+                <!-- Product cards loaded dynamically via JS -->
+            </div>
+        </main>
+    </div>
+
+    <!-- Candidate Picker Modal -->
+    <div class="modal-overlay" id="candidate-modal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="modal-title-box">
+                    <h3 id="modal-product-name">Product Name</h3>
+                    <span class="category-badge" id="modal-product-category">Category</span>
+                </div>
+                <button class="modal-close" onclick="closeCandidateModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div class="modal-body">
+                <p class="description" id="modal-product-desc">Product description goes here...</p>
+
+                <div class="section-heading" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                    <h4 style="margin:0;">Web Scraped Candidates (Click images to select multiple)</h4>
+                    <div style="display:flex;gap:8px;">
+                        <button class="btn btn-sm btn-outline" onclick="selectAllCandidatesInModal()">
+                            <i class="fa-solid fa-check-double"></i> Toggle Select All
+                        </button>
+                        <button class="btn btn-sm btn-outline" onclick="rescrapeCurrentItem()">
+                            <i class="fa-solid fa-rotate"></i> Re-scrape Web
+                        </button>
+                    </div>
+                </div>
+
+                <div class="candidate-grid" id="candidate-grid">
+                    <!-- Candidate thumbnails rendered dynamically -->
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeCandidateModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="confirmCandidateSelection()" id="btn-confirm-candidates">
+                    <i class="fa-solid fa-check"></i> Choose Selected Images (<span id="modal-selected-count">0</span>)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cloudinary Configuration Modal -->
+    <div class="modal-overlay" id="cloudinary-modal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Cloudinary CDN Settings</h3>
+                <button class="modal-close" onclick="closeCloudinaryModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Cloud Name</label>
+                    <input type="text" id="cfg-cloud-name" placeholder="e.g. your_cloud_name">
+                </div>
+                <div class="form-group">
+                    <label>Unsigned Upload Preset (Recommended for easy setup)</label>
+                    <input type="text" id="cfg-upload-preset" placeholder="e.g. ml_default or avani_preset">
+                </div>
+                <div class="divider"><span>OR SIGNED CREDENTIALS</span></div>
+                <div class="form-group">
+                    <label>API Key</label>
+                    <input type="text" id="cfg-api-key" placeholder="Cloudinary API Key">
+                </div>
+                <div class="form-group">
+                    <label>API Secret</label>
+                    <input type="password" id="cfg-api-secret" placeholder="Cloudinary API Secret">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeCloudinaryModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveCloudinaryConfig()">Save Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Live Toast Notifications -->
+    <div id="toast-container"></div>
+
+    <script>console.log('[Avani] Loading app.js…');</script>
+    <script src="app.js?v=6"></script>
+    <script>console.log('[Avani] app.js loaded. getDisplayUrl exists:', typeof getDisplayUrl);</script>
+</body>
+</html>

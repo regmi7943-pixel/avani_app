@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Field Boundary Mapping</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Manrope:wght@100..900&display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .map-glow {
+            filter: drop-shadow(0 0 8px rgba(170, 209, 155, 0.6));
+        }
+        .glass-panel {
+            background: rgba(28, 28, 26, 0.85);
+            backdrop-filter: blur(12px);
+        }
+        @keyframes pulse-emerald {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.7; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .animate-pulse-emerald {
+            animation: pulse-emerald 2s infinite ease-in-out;
+        }
+        .polygon-overlay {
+            clip-path: polygon(25% 35%, 75% 30%, 85% 70%, 15% 75%);
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "secondary-container": "#763312",
+                        "inverse-surface": "#e5e2de",
+                        "on-tertiary-container": "#172f15",
+                        "on-error": "#690005",
+                        "tertiary": "#b1cfa9",
+                        "error": "#ffb4ab",
+                        "primary": "#aad19b",
+                        "on-background": "#e5e2de",
+                        "secondary": "#ffb596",
+                        "surface-dim": "#131312",
+                        "surface-container-high": "#2a2a28",
+                        "primary-container": "#769a68",
+                        "on-primary": "#183710",
+                        "background": "#131312",
+                        "surface": "#131312",
+                        "on-surface-variant": "#c3c8bc",
+                        "surface-container-low": "#1c1c1a",
+                        "on-surface": "#e5e2de",
+                        "surface-container": "#20201e",
+                        "outline": "#8d9387",
+                        "outline-variant": "#43483f",
+                        "surface-variant": "#353532",
+                        "surface-container-highest": "#353532"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "fontFamily": {
+                        "headline": ["Manrope"],
+                        "display": ["Manrope"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface font-body select-none overflow-hidden h-screen w-full">
+<!-- MAP BACKGROUND LAYER -->
+<div class="fixed inset-0 z-0">
+<div class="absolute inset-0 grayscale-[0.2] contrast-[1.1]" data-alt="A cinematic, high-resolution aerial satellite view of fertile agricultural farmland. The landscape is a rich tapestry of vibrant emerald and deep forest green rectangular fields, segmented by earthy brown dirt roads and thin irrigation canals. The lighting is crisp afternoon sun, casting soft shadows that emphasize the texture of the growing crops. The overall aesthetic is clean, professional, and expansive, consistent with a high-end agricultural mapping interface." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDV6Lw9Vh1KQrEG0wccXgVAYVzBqKM3iO1XYNaRpcYTyzG4AIXaw_AI7j6dMtHTr5kcY-9cdjPT6_cU1ujCO4dDRz16TFY7ZjEgOYNQQiG1JgjYWV0rXFi9W48rrbLbcDvbww0NH9n71Q0hQau5hotkCY7xH5J7t1ZThgnxtM1JsEuAj9bSV6DldXXQdVS-bIwnendkOwSBbhyUQvc6jgekGjzmT3Z9H108tizrla-vkVJdqOOLy4tCwB9z33__hcdBfDSRTi94XZNu')">
+</div>
+<div class="absolute inset-0 bg-black/10 pointer-events-none"></div>
+</div>
+<!-- MAP OVERLAY ELEMENTS (SVG Lines and Points) -->
+<div class="fixed inset-0 z-10 pointer-events-none">
+<!-- Polygon Fill -->
+<div class="absolute inset-0 bg-primary/20 polygon-overlay backdrop-blur-[1px]"></div>
+<!-- Connecting Lines (Visualized via SVG) -->
+<svg class="absolute inset-0 w-full h-full">
+<path class="map-glow" d="M 25% 35% L 75% 30% L 85% 70% L 15% 75% Z" fill="none" stroke="#aad19b" stroke-dasharray="4 2" stroke-width="3"></path>
+</svg>
+<!-- Pins -->
+<div class="absolute top-[35%] left-[25%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
+<div class="w-6 h-6 bg-primary text-on-primary rounded-full flex items-center justify-center text-[10px] font-bold shadow-lg">1</div>
+<div class="w-2 h-2 bg-primary rounded-full mt-1 map-glow"></div>
+</div>
+<div class="absolute top-[30%] left-[75%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
+<div class="w-6 h-6 bg-primary text-on-primary rounded-full flex items-center justify-center text-[10px] font-bold shadow-lg">2</div>
+<div class="w-2 h-2 bg-primary rounded-full mt-1 map-glow"></div>
+</div>
+<div class="absolute top-[70%] left-[85%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
+<div class="w-6 h-6 bg-primary text-on-primary rounded-full flex items-center justify-center text-[10px] font-bold shadow-lg">3</div>
+<div class="w-2 h-2 bg-primary rounded-full mt-1 map-glow"></div>
+</div>
+<div class="absolute top-[75%] left-[15%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
+<div class="w-6 h-6 bg-primary text-on-primary rounded-full flex items-center justify-center text-[10px] font-bold shadow-lg">4</div>
+<div class="w-2 h-2 bg-primary rounded-full mt-1 map-glow"></div>
+</div>
+<!-- Center Crosshair -->
+<div class="absolute inset-0 flex items-center justify-center">
+<div class="relative w-12 h-12 flex items-center justify-center">
+<div class="absolute w-full h-[2px] bg-primary/40"></div>
+<div class="absolute w-[2px] h-full bg-primary/40"></div>
+<div class="w-4 h-4 rounded-full border-2 border-primary animate-pulse-emerald shadow-[0_0_15px_rgba(170,209,155,0.8)]"></div>
+</div>
+</div>
+</div>
+<!-- UI LAYER: TOP BAR -->
+<header class="fixed top-0 left-0 w-full z-50 p-4">
+<div class="flex items-center justify-between glass-panel rounded-full px-4 py-3 shadow-2xl border border-outline-variant/20">
+<button class="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container-high text-on-surface hover:bg-surface-container-highest transition-colors active:scale-90">
+<span class="material-symbols-outlined">arrow_back</span>
+</button>
+<div class="flex flex-col items-center">
+<h1 class="font-headline font-bold text-sm tracking-tight">FIELD BOUNDARY</h1>
+<span class="bg-primary/20 text-primary text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-widest mt-1">Step 1 of 2</span>
+</div>
+<button class="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container-high text-error hover:bg-error-container/20 transition-colors active:scale-90">
+<span class="material-symbols-outlined">delete</span>
+</button>
+</div>
+</header>
+<!-- UI LAYER: SEARCH BAR -->
+<div class="fixed top-24 left-4 right-4 z-40 flex gap-2">
+<div class="flex-grow glass-panel rounded-xl px-4 py-3 shadow-lg flex items-center border border-outline-variant/10">
+<span class="material-symbols-outlined text-on-surface-variant mr-3">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-sm text-on-surface placeholder:text-on-surface-variant w-full font-body" placeholder="Search location or landmark..." type="text"/>
+</div>
+<button class="w-12 h-12 flex items-center justify-center rounded-xl bg-primary text-on-primary shadow-lg hover:brightness-110 active:scale-95 transition-all">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">my_location</span>
+</button>
+</div>
+<!-- UI LAYER: FLOATING INSTRUCTION PILL -->
+<div class="fixed bottom-64 left-1/2 -translate-x-1/2 z-40">
+<div class="glass-panel px-4 py-2 rounded-full shadow-xl flex items-center gap-2 border border-primary/30">
+<span class="text-xs">✨</span>
+<span class="text-[11px] font-bold tracking-wide uppercase text-primary">Boundary Mapped (4 Corners) • Ready</span>
+</div>
+</div>
+<!-- UI LAYER: ACTION ROW -->
+<div class="fixed bottom-40 left-0 w-full z-40 px-6 flex items-center justify-between">
+<button class="w-14 h-14 flex flex-col items-center justify-center rounded-2xl glass-panel text-on-surface shadow-xl active:scale-90 transition-all">
+<span class="material-symbols-outlined">undo</span>
+<span class="text-[8px] font-bold mt-1 uppercase">Undo</span>
+</button>
+<button class="h-16 px-8 rounded-full bg-gradient-to-r from-primary to-primary-container text-on-primary flex items-center gap-3 shadow-[0_8px_25px_-5px_rgba(170,209,155,0.5)] active:scale-95 transition-all">
+<span class="material-symbols-outlined font-bold">add_circle</span>
+<span class="font-headline font-extrabold text-sm uppercase tracking-wider">Place Corner</span>
+</button>
+<button class="w-14 h-14 flex flex-col items-center justify-center rounded-2xl glass-panel text-on-surface shadow-xl active:scale-90 transition-all">
+<span class="material-symbols-outlined">gps_fixed</span>
+<span class="text-[8px] font-bold mt-1 uppercase">Recent</span>
+</button>
+</div>
+<!-- UI LAYER: BOTTOM DATA CARD -->
+<div class="fixed bottom-4 left-4 right-4 z-50">
+<div class="bg-surface-container-high p-5 rounded-3xl shadow-2xl border border-outline-variant/10 flex flex-col gap-5">
+<div class="flex justify-between items-start">
+<div>
+<p class="text-[10px] font-bold text-on-surface-variant tracking-[0.1em] uppercase mb-1">Land Area</p>
+<div class="flex items-baseline gap-2">
+<span class="font-display text-3xl font-bold text-primary">4.2</span>
+<span class="font-headline font-semibold text-lg text-on-surface">Kattha</span>
+</div>
+<p class="text-[12px] text-on-surface-variant font-medium mt-1">≈ 1,422 m²</p>
+</div>
+<div class="p-3 bg-surface-container rounded-2xl">
+<span class="material-symbols-outlined text-primary text-3xl" style="font-variation-settings: 'FILL' 1;">square_foot</span>
+</div>
+</div>
+<button class="w-full h-14 bg-on-surface text-surface font-headline font-bold text-sm flex items-center justify-center gap-2 rounded-2xl hover:bg-white active:scale-[0.98] transition-all">
+                CONTINUE
+                <span class="material-symbols-outlined text-lg">arrow_forward</span>
+</button>
+</div>
+</div>
+<!-- AMBIENT EFFECT: SCAN LINE -->
+<style>
+        @keyframes scan {
+            0% { transform: translateY(-100%); opacity: 0; }
+            50% { opacity: 0.3; }
+            100% { transform: translateY(100vh); opacity: 0; }
+        }
+        .scan-line {
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #aad19b, transparent);
+            animation: scan 4s linear infinite;
+        }
+    </style>
+<div class="fixed inset-0 pointer-events-none z-20 overflow-hidden">
+<div class="scan-line w-full absolute top-0"></div>
+</div>
+<script>
+        // Simple micro-interaction for the "Place Corner" button
+        const placeBtn = document.querySelector('button.bg-gradient-to-r');
+        placeBtn.addEventListener('click', () => {
+            const ripple = document.createElement('div');
+            ripple.className = 'absolute inset-0 bg-white/20 rounded-full animate-ping';
+            placeBtn.appendChild(ripple);
+            setTimeout(() => ripple.remove(), 500);
+        });
+
+        // Search bar focus effect
+        const searchInput = document.querySelector('input');
+        const searchContainer = searchInput.parentElement;
+        searchInput.addEventListener('focus', () => {
+            searchContainer.classList.add('border-primary/50');
+            searchContainer.classList.remove('border-outline-variant/10');
+        });
+        searchInput.addEventListener('blur', () => {
+            searchContainer.classList.remove('border-primary/50');
+            searchContainer.classList.add('border-outline-variant/10');
+        });
+    </script>
+</body></html>

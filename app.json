@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "avani_app",
+    "slug": "avani_app",
+    "scheme": "avaniapp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.kirannnnn.avaniapp"
+    },
+    "android": {
+      "package": "com.kirannnnn.avaniapp",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyCwabtf3fOWqmc34bgDXDftx-J59Y8XbIY"
+        }
+      },
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-web-browser",
+      "expo-asset",
+      "expo-font",
+      "expo-audio",
+      "expo-notifications"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "da9b9f08-ed29-44e2-900d-800709822e9c"
+      }
+    },
+    "owner": "kirannnnn"
+  }
+}
