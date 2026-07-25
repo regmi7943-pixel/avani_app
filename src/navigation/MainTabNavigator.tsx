@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
 import FarmsScreen from '../screens/main/FarmsScreen';
@@ -9,10 +9,15 @@ import MarketplaceScreen from '../screens/main/MarketplaceScreen';
 import SettingsScreen from '../screens/main/SettingsScreen';
 
 import CustomTabBar from '../components/CustomTabBar';
+import { preFetchAllSoilTelemetry } from '../services/soilApiService';
 
 const Tab = createBottomTabNavigator();
 
 export default function MainTabNavigator() {
+  useEffect(() => {
+    // Pre-fetch soil telemetry in the background on App/Tab initialization for 0ms Soil Report loading
+    preFetchAllSoilTelemetry();
+  }, []);
   return (
     <Tab.Navigator
       tabBar={(props) => <CustomTabBar {...props} />}

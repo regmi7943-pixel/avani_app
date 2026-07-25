@@ -56,9 +56,13 @@ export const getCachedSoilTelemetry = (locationName?: string | null): RealSoilTe
 };
 
 // Background Pre-Fetcher (Call on App Init / Screen Mount)
-export async function preFetchAllSoilTelemetry(): Promise<void> {
-  const keys = ['bharatpur', 'madi', 'kalyanpur', 'pokhara'];
+export async function preFetchAllSoilTelemetry(customLocations?: (string | null)[]): Promise<void> {
+  const keys = customLocations && customLocations.length > 0 
+    ? customLocations 
+    : ['bharatpur', 'madi', 'kalyanpur', 'pokhara', 'kathmandu'];
+
   for (const key of keys) {
+    if (!key) continue;
     try {
       await fetchLiveSoilTelemetry(key, false);
     } catch (e) {

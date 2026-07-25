@@ -3204,6 +3204,10 @@ const FarmsScreen = () => {
 
         if (fieldsError) throw fieldsError;
         setFields(fieldsData || []);
+        if (fieldsData && fieldsData.length > 0) {
+          const locs = fieldsData.map((f: any) => f.location_name).filter(Boolean);
+          preFetchAllSoilTelemetry(locs).catch(() => {});
+        }
       }
     } catch (error: any) {
       console.warn('Error fetching data:', error.message);
