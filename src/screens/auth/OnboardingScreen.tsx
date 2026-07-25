@@ -638,8 +638,8 @@ export default function OnboardingScreen() {
             </View>
           </View>
 
-          {/* Footer Overlay (Positioned Absolute Bottom) */}
-          <View style={styles.langFooter}>
+          {/* Footer Buttons (in-flow, not absolute) */}
+          <View style={{ width: '100%', paddingHorizontal: 24, marginTop: 10 }}>
             <TouchableOpacity
               style={styles.continueButton}
               onPress={saveGoalAndComplete}
@@ -1039,9 +1039,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: '#F5F8F5',
-    paddingTop: Platform.OS === 'ios' ? 44 : 20,
-    paddingBottom: 20,
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
   },
   /* --- Top Row: Mascot Left + Bubble Right --- */
