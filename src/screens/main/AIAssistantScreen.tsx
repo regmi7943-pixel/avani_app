@@ -1438,7 +1438,7 @@ export default function AIAssistantScreen() {
       >
         <LinearGradient 
           colors={['#ffffff', '#f4f6f4']} 
-          style={styles.callScreen}
+          style={[styles.callScreen, { paddingBottom: Math.max(insets.bottom + 48, 64) }]}
         >
           {/* Top Status Indicators */}
           <View style={styles.callHeader}>
