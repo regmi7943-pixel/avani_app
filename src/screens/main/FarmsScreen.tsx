@@ -1657,20 +1657,28 @@ const getStageAwareWaterAdvice = (cropName: string, stageName: string, moisture:
 
   if (isRice) {
     if (s.includes('vegetative') || s.includes('reproductive') || s.includes('flowering')) {
-      if (moisture < 45) {
+      if (moisture < 20) {
         return {
           statusLabel: language === 'ne' ? 'सिंचाई आवश्यक (धान)' : 'Low for Paddy (Requires Water)',
           adviceText: language === 'ne' 
-            ? `धानको ${stageName} चरणका लागि ५०% भन्दा माथि (३-५ से.मी. पानी) आवश्यक छ। तत्काल सिंचाइ गर्नुहोस्।`
-            : `Paddy in ${stageName} stage requires 3-5 cm standing water (50%+ moisture). Please irrigate.`,
+            ? `धानको ${stageName} चरणका लागि माटोमा पर्याप्त पानी छैन (२०% भन्दा कम)। कृपया तत्काल ३-५ से.मी. सिंचाइ गर्नुहोस्।`
+            : `Paddy in ${stageName} stage requires standing water. Soil moisture is low (${moisture}%). Please irrigate.`,
           color: '#cf6a28'
+        };
+      } else if (moisture >= 20 && moisture < 28) {
+        return {
+          statusLabel: language === 'ne' ? 'मध्यम जलस्तर' : 'Moderate Moisture',
+          adviceText: language === 'ne'
+            ? `धानको ${stageName} चरण: माटो ओसिलो छ (${moisture}%)। जलस्तर ३-५ से.मी. बनाए राख्न हल्का सिंचाइ गर्नुहोस्।`
+            : `Paddy in ${stageName} stage is moist (${moisture}%). Top up light irrigation to maintain 3-5 cm standing water.`,
+          color: '#d97706'
         };
       }
       return {
-        statusLabel: language === 'ne' ? 'उत्कृष्ट जलस्तर' : 'Flooded (Ideal for Paddy)',
+        statusLabel: language === 'ne' ? 'उत्कृष्ट जलस्तर' : 'Flooded (Ideal 3-5cm Standing Water)',
         adviceText: language === 'ne'
-          ? `उत्कृष्ट अवस्था: धानको ${stageName} चरणका लागि आवश्यक जलस्तर स्थिर छ। कुनै कदम आवश्यक छैन।`
-          : `Ideal condition: Standing water is correctly maintained for Paddy during ${stageName}. No action needed.`,
+          ? `उत्कृष्ट अवस्था: धानको ${stageName} चरणका लागि आवश्यक जलस्तर (३-५ से.मी.) कायम छ (${moisture}%)। सिंचाइ आवश्यक छैन।`
+          : `Ideal condition: 3-5 cm standing water is correctly maintained (${moisture}% saturated) for Paddy during ${stageName}. No action needed.`,
         color: '#3b855e'
       };
     }
