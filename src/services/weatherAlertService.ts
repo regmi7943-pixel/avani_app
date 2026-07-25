@@ -101,9 +101,17 @@ TaskManager.defineTask(BACKGROUND_WEATHER_ALERT_TASK, async () => {
   }
 });
 
+import Constants, { ExecutionEnvironment } from 'expo-constants';
+
 // ── Background Registration ──
 export async function registerBackgroundWeatherCheck() {
   try {
+    // Background fetch is not supported inside Expo Go sandbox; active in standalone APK
+    if (Constants.executionEnvironment === ExecutionEnvironment.StoreClient) {
+      console.log('Expo Go sandbox active: Background fetch skipped (active in standalone APK).');
+      return;
+    }
+
     if (!BackgroundFetch || !BackgroundFetch.getStatusAsync) return;
     const status = await BackgroundFetch.getStatusAsync();
     if (status === BackgroundFetch.BackgroundFetchStatus.Available) {
@@ -115,7 +123,7 @@ export async function registerBackgroundWeatherCheck() {
       console.log('Background weather checking task registered successfully.');
     }
   } catch (err) {
-    console.warn('Background weather register task skipped safely:', err);
+    console.log('Background weather register notice:', err);
   }
 }
 
