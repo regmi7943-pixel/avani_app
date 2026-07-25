@@ -1073,48 +1073,10 @@ Return ONLY a raw valid JSON object with exactly these fields (do not wrap in ma
   "body": string (only if hasAlert is true)
 }`;
 
-  // Try Gemini first
-  if (hasGeminiKey) {
-    try {
-      console.log('calling Gemini for dynamic alerts weather as primary...');
-      const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [
-            { role: 'user', parts: [{ text: prompt }] }
-          ],
-          generationConfig: {
-            responseMimeType: "application/json",
-            temperature: 0.1,
-          }
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        let text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text) {
-          text = text.trim();
-          if (text.startsWith('```')) {
-            text = text.replace(/^```json\s*/i, '').replace(/```$/, '').trim();
-          }
-          return JSON.parse(text);
-        }
-      } else {
-        throw new Error(`Gemini HTTP Error: ${response.status}`);
-      }
-    } catch (e) {
-      console.warn('Gemini weather alert generation failed, falling back to Groq:', e);
-    }
-  }
-
-  // Try Groq fallback
+  // Try Groq first as primary AI provider
   if (hasGroqKey) {
     try {
-      console.log('calling Groq for dynamic alerts weather fallback...');
+      console.log('Calling Groq AI for dynamic weather risk analysis...');
       const response = await fetch(GROQ_API_URL, {
         method: 'POST',
         headers: {
@@ -1141,9 +1103,47 @@ Return ONLY a raw valid JSON object with exactly these fields (do not wrap in ma
           }
           return JSON.parse(text);
         }
+      } else {
+        throw new Error(`Groq HTTP Error: ${response.status}`);
       }
     } catch (e) {
-      console.warn('Groq weather alert generation fallback failed:', e);
+      console.warn('Groq weather alert generation failed, attempting Gemini fallback:', e);
+    }
+  }
+
+  // Fallback to Gemini if Groq fails or no key
+  if (hasGeminiKey) {
+    try {
+      console.log('Calling Gemini as fallback for weather risk analysis...');
+      const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [
+            { role: 'user', parts: [{ text: prompt }] }
+          ],
+          generationConfig: {
+            responseMimeType: "application/json",
+            temperature: 0.1,
+          }
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        let text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text) {
+          text = text.trim();
+          if (text.startsWith('```')) {
+            text = text.replace(/^```json\s*/i, '').replace(/```$/, '').trim();
+          }
+          return JSON.parse(text);
+        }
+      }
+    } catch (e) {
+      console.warn('Gemini weather alert fallback failed:', e);
     }
   }
 
