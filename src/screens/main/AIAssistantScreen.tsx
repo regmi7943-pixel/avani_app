@@ -20,7 +20,7 @@ import {
   FlatList,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '../../lib/LanguageContext';
 import { useTheme } from '../../lib/ThemeContext';
@@ -117,7 +117,11 @@ const markdownStyles = {
 export default function AIAssistantScreen() {
   const { language } = useLanguage();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  // Tab bar height = 64 + insets.bottom; add 12px gap above it
+  const TAB_BAR_HEIGHT = 64 + insets.bottom + 12;
 
   // Voice Call Modal States
   const [voiceCallVisible, setVoiceCallVisible] = useState(false);
@@ -1390,7 +1394,7 @@ export default function AIAssistantScreen() {
         {/* Bottom Capsule Input Bar */}
         <View style={[
           styles.bottomBar,
-          { paddingBottom: keyboardVisible ? 12 : (Platform.OS === 'ios' ? 92 : 84) }
+          { paddingBottom: keyboardVisible ? 12 : TAB_BAR_HEIGHT }
         ]}>
           <View style={styles.inputContainer}>
             {/* Face-to-Face Talk Button */}
