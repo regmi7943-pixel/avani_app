@@ -1,7 +1,6 @@
 // Official Google YouTube Data API v3 Service
-// Key: AIzaSyDWJy8kNRKAKiKQo5EwTeDU5OKQLHUqf1g
 
-export const GOOGLE_YOUTUBE_API_KEY = 'AIzaSyDWJy8kNRKAKiKQo5EwTeDU5OKQLHUqf1g';
+export const GOOGLE_YOUTUBE_API_KEY = process.env.EXPO_PUBLIC_YOUTUBE_API_KEY || '';
 
 export interface YouTubeFarmingItem {
   id: string;

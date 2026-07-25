@@ -15,7 +15,7 @@
       "package": "com.kirannnnn.avaniapp",
       "config": {
         "googleMaps": {
-          "apiKey": "AIzaSyCwabtf3fOWqmc34bgDXDftx-J59Y8XbIY"
+          "apiKey": process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || ""
         }
       },
       "adaptiveIcon": {
