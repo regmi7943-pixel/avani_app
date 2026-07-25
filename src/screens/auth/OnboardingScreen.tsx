@@ -638,8 +638,8 @@ export default function OnboardingScreen() {
             </View>
           </View>
 
-          {/* Footer Buttons (in-flow, not absolute) */}
-          <View style={{ width: '100%', paddingHorizontal: 24, marginTop: 10 }}>
+          {/* Footer Buttons */}
+          <View style={styles.goalFooterButtons}>
             <TouchableOpacity
               style={styles.continueButton}
               onPress={saveGoalAndComplete}
@@ -1039,8 +1039,15 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: '#F5F8F5',
-    justifyContent: 'center',
+    paddingTop: Platform.OS === 'ios' ? 54 : 32,
+    paddingBottom: 24,
+    justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  goalFooterButtons: {
+    width: '100%',
+    paddingHorizontal: 24,
+    marginBottom: 4,
   },
   /* --- Top Row: Mascot Left + Bubble Right --- */
   goalTopHeaderRow: {
@@ -1048,7 +1055,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     width: '100%',
-    marginTop: 10,
+    marginTop: 4,
     gap: 12,
     zIndex: 1,
   },
