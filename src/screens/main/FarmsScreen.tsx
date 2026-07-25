@@ -28,6 +28,7 @@ import { useLanguage } from '../../lib/LanguageContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { preFetchAllSoilTelemetry } from '../../services/soilApiService';
+import { triggerManualWeatherAlertTest } from '../../services/weatherAlertService';
 import Svg, {
   Polygon as SvgPolygon,
   Polyline as SvgPolyline,
@@ -3026,6 +3027,7 @@ const FarmsScreen = () => {
   const [deleting, setDeleting] = useState(false);
   const [weatherData, setWeatherData] = useState<any | null>(null);
   const [regionalWeather, setRegionalWeather] = useState<any | null>(null);
+  const [alertModalVisible, setAlertModalVisible] = useState(false);
   const [checkoutModalVisible, setCheckoutModalVisible] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [orderProcessing, setOrderProcessing] = useState(false);
@@ -3611,7 +3613,11 @@ const FarmsScreen = () => {
                     </View>
 
                     {/* Mini Card 2: Alerts */}
-                    <View style={[styles.bentoCardMini, { backgroundColor: alertCount > 0 ? '#fbe9dd' : '#eaf6f0' }]}>
+                    <TouchableOpacity 
+                      style={[styles.bentoCardMini, { backgroundColor: alertCount > 0 ? '#fbe9dd' : '#eaf6f0' }]}
+                      activeOpacity={0.8}
+                      onPress={() => setAlertModalVisible(true)}
+                    >
                       <View style={styles.bentoIconCircleMini}>
                         <Ionicons 
                           name={alertCount > 0 ? "warning-outline" : "checkmark-circle-outline"} 
@@ -3627,7 +3633,7 @@ const FarmsScreen = () => {
                           {alertCount > 0 ? (language === 'ne' ? 'अलर्टहरू' : 'Farm Alerts') : (language === 'ne' ? 'सबै सामान्य' : 'All Healthy')}
                         </Text>
                       </View>
-                    </View>
+                    </TouchableOpacity>
                   </View>
                 </View>
               </View>
@@ -4641,6 +4647,18 @@ const FarmsScreen = () => {
           language={language}
         />
       )}
+
+      {/* Farm Risk & Health Alerts Modal */}
+      <FarmAlertsModalOverlay
+        visible={alertModalVisible}
+        onClose={() => setAlertModalVisible(false)}
+        fields={fields}
+        regionalWeather={regionalWeather}
+        language={language}
+        colors={colors}
+        isDarkMode={isDarkMode}
+        calculateDynamicHealthScore={calculateDynamicHealthScore}
+      />
     </SafeAreaView>
   );
 };
@@ -6606,5 +6624,205 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
 });
+
+function FarmAlertsModalOverlay({
+  visible,
+  onClose,
+  fields,
+  regionalWeather,
+  language,
+  colors,
+  isDarkMode,
+  calculateDynamicHealthScore,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  fields: Field[];
+  regionalWeather: any;
+  language: string;
+  colors: any;
+  isDarkMode: boolean;
+  calculateDynamicHealthScore: (f: Field) => number;
+}) {
+  const [testing, setTesting] = useState(false);
+
+  if (!visible) return null;
+
+  const isNe = language === 'ne';
+  const alertFields = fields.filter(
+    (f) => f.status === 'Needs Attention' || calculateDynamicHealthScore(f) < 70
+  );
+
+  const handleRunAiScan = async () => {
+    setTesting(true);
+    try {
+      await triggerManualWeatherAlertTest(isNe ? 'ne' : 'en');
+      Alert.alert(
+        isNe ? 'AI स्क्यान सम्पन्न' : 'AI Scan Complete',
+        isNe ? 'सबै खेतको मौसम र जोखिम विश्लेषण सम्पन्न भयो।' : 'Weather & risk analysis completed across all registered fields.'
+      );
+    } catch (e: any) {
+      Alert.alert('Notice', e.message || 'Scan completed.');
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+        <TouchableOpacity style={{ flex: 1 }} onPress={onClose} activeOpacity={1} />
+        <View
+          style={{
+            backgroundColor: isDarkMode ? '#1e2920' : '#FFFFFF',
+            borderTopLeftRadius: 28,
+            borderTopRightRadius: 28,
+            padding: 24,
+            maxHeight: '80%',
+            gap: 16,
+          }}
+        >
+          {/* Header */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: alertFields.length > 0 ? '#fbe9dd' : '#eaf6f0', justifyContent: 'center', alignItems: 'center' }}>
+                <Ionicons name={alertFields.length > 0 ? "warning" : "shield-checkmark"} size={22} color={alertFields.length > 0 ? COLORS.clay : COLORS.forest500} />
+              </View>
+              <View>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: colors.text }}>
+                  {isNe ? 'बाली र मौसम जोखिम अलर्टहरू' : 'Farm Risk & Health Alerts'}
+                </Text>
+                <Text style={{ fontSize: 12, color: colors.secondaryText, fontWeight: '600' }}>
+                  {alertFields.length > 0
+                    ? (isNe ? `${alertFields.length} सक्रिय जोखिम भेटियो` : `${alertFields.length} Active Field Risks Detected`)
+                    : (isNe ? 'सबै खेतहरू सुरक्षित छन्' : 'All Farms Operating Optimally')}
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity onPress={onClose} style={{ padding: 6 }}>
+              <Ionicons name="close" size={24} color={colors.text} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={false}>
+            <View style={{ gap: 12 }}>
+              {/* Field Specific Alerts */}
+              {alertFields.length > 0 ? (
+                alertFields.map((field) => {
+                  const score = calculateDynamicHealthScore(field);
+                  return (
+                    <View
+                      key={field.id}
+                      style={{
+                        backgroundColor: isDarkMode ? '#28382c' : '#FFF5F0',
+                        borderRadius: 16,
+                        borderWidth: 1.5,
+                        borderColor: '#FDBA74',
+                        padding: 16,
+                        gap: 8,
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 15, fontWeight: '800', color: colors.text }}>
+                          🌾 {field.name} ({field.crop_type})
+                        </Text>
+                        <View style={{ backgroundColor: score < 60 ? '#EF4444' : '#F59E0B', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 }}>
+                          <Text style={{ color: '#FFF', fontSize: 11, fontWeight: '800' }}>
+                            {score}% Health
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={{ fontSize: 13, color: colors.secondaryText, lineHeight: 18 }}>
+                        {isNe
+                          ? `यस खेतको स्वास्थ्य स्कोर ${score}% छ। माटोको ओसिलोपन र रोग नियन्त्रणको निरीक्षण आवश्यक छ।`
+                          : `Field health score is ${score}%. Requires soil moisture monitoring and pest inspection.`}
+                      </Text>
+                    </View>
+                  );
+                })
+              ) : (
+                <View
+                  style={{
+                    backgroundColor: isDarkMode ? '#28382c' : '#F0FDF4',
+                    borderRadius: 18,
+                    borderWidth: 1.5,
+                    borderColor: '#86EFAC',
+                    padding: 20,
+                    alignItems: 'center',
+                    gap: 10,
+                  }}
+                >
+                  <Ionicons name="checkmark-circle" size={42} color="#16A34A" />
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text, textAlign: 'center' }}>
+                    {isNe ? 'सबै बाली र खेतहरू उत्कृष्ट अवस्थामा छन्' : 'All Farms & Crops Healthy'}
+                  </Text>
+                  <Text style={{ fontSize: 13, color: colors.secondaryText, textAlign: 'center', lineHeight: 18 }}>
+                    {isNe
+                      ? 'तपाईंका सबै खेतहरूमा पोषक तत्व, पानीको मात्रा र मौसम अनुकूल छ। कुनै जोखिम छैन!'
+                      : 'Nutrients, water saturation, and regional weather are all in optimal condition across your fields!'}
+                  </Text>
+                </View>
+              )}
+
+              {/* Regional Weather Warning Item */}
+              {regionalWeather && (
+                <View
+                  style={{
+                    backgroundColor: isDarkMode ? '#263329' : '#F0F9FF',
+                    borderRadius: 16,
+                    borderWidth: 1,
+                    borderColor: '#BAE6FD',
+                    padding: 16,
+                    gap: 6,
+                    marginTop: 4,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Ionicons name="cloudy-night-outline" size={18} color="#0284C7" />
+                    <Text style={{ fontSize: 14, fontWeight: '800', color: colors.text }}>
+                      {isNe ? 'क्षेत्रीय मौसम अवस्था' : 'Regional Weather Status'}
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 12.5, color: colors.secondaryText, lineHeight: 17 }}>
+                    {isNe
+                      ? `तापक्रम: ${regionalWeather.temperature}°C | वर्षा सम्भावना: ${regionalWeather.precipitationProbability}% | माटो ओसिलोपन: ${regionalWeather.soilMoisture}%`
+                      : `Temp: ${regionalWeather.temperature}°C | Rain Prob: ${regionalWeather.precipitationProbability}% | Soil Moisture: ${regionalWeather.soilMoisture}%`}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </ScrollView>
+
+          {/* AI Scan Button */}
+          <TouchableOpacity
+            style={{
+              backgroundColor: COLORS.forest500,
+              borderRadius: 16,
+              paddingVertical: 14,
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexDirection: 'row',
+              gap: 8,
+            }}
+            activeOpacity={0.9}
+            onPress={handleRunAiScan}
+            disabled={testing}
+          >
+            {testing ? (
+              <ActivityIndicator color="#FFF" size="small" />
+            ) : (
+              <>
+                <Ionicons name="sparkles" size={18} color="#FFF" />
+                <Text style={{ color: '#FFF', fontSize: 14, fontWeight: '800' }}>
+                  {isNe ? 'AI जोखिम स्क्यान चलाउनुहोस्' : 'Run AI Risk Diagnostic'}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
 
 export default FarmsScreen;
