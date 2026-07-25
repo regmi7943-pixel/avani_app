@@ -6718,12 +6718,12 @@ function FarmAlertsModalOverlay({
                         borderRadius: 16,
                         borderWidth: 1.5,
                         borderColor: '#FDBA74',
-                        padding: 16,
-                        gap: 8,
+                        padding: 14,
+                        gap: 6,
                       }}
                     >
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Text style={{ fontSize: 15, fontWeight: '800', color: colors.text }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                        <Text style={{ flex: 1, fontSize: 14.5, fontWeight: '800', color: colors.text }} numberOfLines={1}>
                           🌾 {field.name} ({field.crop_type})
                         </Text>
                         <View style={{ backgroundColor: score < 60 ? '#EF4444' : '#F59E0B', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 }}>
@@ -6732,10 +6732,10 @@ function FarmAlertsModalOverlay({
                           </Text>
                         </View>
                       </View>
-                      <Text style={{ fontSize: 13, color: colors.secondaryText, lineHeight: 18 }}>
+                      <Text style={{ fontSize: 12.5, color: colors.secondaryText, lineHeight: 16 }}>
                         {isNe
-                          ? `यस खेतको स्वास्थ्य स्कोर ${score}% छ। माटोको ओसिलोपन र रोग नियन्त्रणको निरीक्षण आवश्यक छ।`
-                          : `Field health score is ${score}%. Requires soil moisture monitoring and pest inspection.`}
+                          ? `• माटो ओसिलोपन र रोग नियन्त्रण जाँच गर्नुहोस्।`
+                          : `• Monitor soil moisture & inspect for pest risks.`}
                       </Text>
                     </View>
                   );
@@ -6747,19 +6747,19 @@ function FarmAlertsModalOverlay({
                     borderRadius: 18,
                     borderWidth: 1.5,
                     borderColor: '#86EFAC',
-                    padding: 20,
+                    padding: 16,
                     alignItems: 'center',
-                    gap: 10,
+                    gap: 8,
                   }}
                 >
-                  <Ionicons name="checkmark-circle" size={42} color="#16A34A" />
-                  <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text, textAlign: 'center' }}>
-                    {isNe ? 'सबै बाली र खेतहरू उत्कृष्ट अवस्थामा छन्' : 'All Farms & Crops Healthy'}
+                  <Ionicons name="checkmark-circle" size={36} color="#16A34A" />
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: colors.text, textAlign: 'center' }}>
+                    {isNe ? 'सबै बालीहरू सुरक्षित छन्' : 'All Farms & Crops Healthy'}
                   </Text>
-                  <Text style={{ fontSize: 13, color: colors.secondaryText, textAlign: 'center', lineHeight: 18 }}>
+                  <Text style={{ fontSize: 12.5, color: colors.secondaryText, textAlign: 'center' }}>
                     {isNe
-                      ? 'तपाईंका सबै खेतहरूमा पोषक तत्व, पानीको मात्रा र मौसम अनुकूल छ। कुनै जोखिम छैन!'
-                      : 'Nutrients, water saturation, and regional weather are all in optimal condition across your fields!'}
+                      ? 'पोषक तत्व, पानी र मौसम अनुकूल छ।'
+                      : 'Weather & soil saturation are optimal across all fields.'}
                   </Text>
                 </View>
               )}
