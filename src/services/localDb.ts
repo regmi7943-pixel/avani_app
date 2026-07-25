@@ -180,9 +180,10 @@ export async function incrementSyncAttempts(id: number) {
   }
 }
 
-// ── Export Aliases for Sync Engine ──
+// ── Export Aliases for Sync Engine & Data Service ──
 export const getPendingSyncActions = getOfflineSyncQueue;
 export const removeSyncAction = dequeueOfflineSync;
 export const incrementSyncAttempt = incrementSyncAttempts;
 export const saveCachedField = saveFieldToCache;
+export const enqueueSyncAction = enqueueOfflineSync;
 
