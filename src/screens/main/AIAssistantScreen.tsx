@@ -1390,7 +1390,7 @@ export default function AIAssistantScreen() {
         {/* Bottom Capsule Input Bar */}
         <View style={[
           styles.bottomBar,
-          { paddingBottom: keyboardVisible ? 10 : (Platform.OS === 'ios' ? 68 : 54) }
+          { paddingBottom: keyboardVisible ? 12 : (Platform.OS === 'ios' ? 92 : 84) }
         ]}>
           <View style={styles.inputContainer}>
             {/* Face-to-Face Talk Button */}
