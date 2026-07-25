@@ -901,16 +901,20 @@ export default function AIAssistantScreen() {
         return;
       }
 
-      // Reset native audio bridge state to release any locked hardware resources
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        playsInSilentModeIOS: true,
-      });
+      // Reset native audio bridge state safely to release hardware resources
+      try {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+          shouldDuckAndroid: true,
+          stayActiveInBackground: false,
+        });
+      } catch (e) {
+        console.warn('Audio mode setup notice:', e);
+      }
 
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
+      // Small async delay to allow native Android hardware audio track to release completely
+      await new Promise(r => setTimeout(r, 200));
 
       const newRecording = new Audio.Recording();
       await newRecording.prepareToRecordAsync({
