@@ -8,7 +8,7 @@ import { useAudioPlayer } from 'expo-audio';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useLanguage } from '../../lib/LanguageContext';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 type RootStackParamList = {
   Onboarding: undefined;
@@ -22,7 +22,7 @@ const translations = {
   en: {
     chooseLangTitle: "Choose your language!",
     chooseLangSub: "Select a language to get started with Avani",
-    goalTitle: "What is your main farming goal?",
+    goalTitle: "What is your farming goal?",
     goalSub: "Help us customize your Avani experience",
     continue: "CONTINUE",
     goBack: "GO BACK",
@@ -560,7 +560,7 @@ export default function OnboardingScreen() {
 
                 const translateY = scrollX.interpolate({
                   inputRange,
-                  outputRange: [80, 32, 0, 32, 80],
+                  outputRange: [height * 0.12, height * 0.065, height * 0.03, height * 0.065, height * 0.12],
                   extrapolate: 'clamp',
                 });
 
@@ -630,12 +630,6 @@ export default function OnboardingScreen() {
                 );
               })}
             </Animated.ScrollView>
-            {/* Dot indicators */}
-            <View style={styles.dotRow}>
-              {GOAL_CARDS.map((c) => (
-                <View key={c.id} style={[styles.dot, selectedGoal === c.id && styles.dotActive]} />
-              ))}
-            </View>
           </View>
 
           {/* Footer Buttons */}
@@ -1060,11 +1054,16 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   goalPeekingMascot: {
-    width: 65,
-    height: 80,
+    position: 'absolute',
+    left: 0,
+    top: -height * 0.025,
+    width: width * 0.32,
+    height: width * 0.32 * (273 / 161),
+    zIndex: 1,
   },
   goalSpeechBubbleRight: {
     flex: 1,
+    marginLeft: width * 0.31,
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
     borderWidth: 2,
@@ -1076,6 +1075,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 8,
     elevation: 3,
+    zIndex: 2,
   },
   goalBubbleArrowLeft: {
     position: 'absolute',
@@ -1114,24 +1114,23 @@ const styles = StyleSheet.create({
   },
   goalSpeechTitle: {
     fontFamily: 'System',
-    fontSize: 14,
+    fontSize: 12.5,
     fontWeight: '800',
     color: '#292524',
     marginBottom: 2,
   },
   goalSpeechSub: {
     fontFamily: 'System',
-    fontSize: 10.5,
+    fontSize: 9.5,
     color: '#78716C',
     fontWeight: '600',
-    lineHeight: 14,
+    lineHeight: 13,
   },
   /* --- Swipeable Focus Card Carousel --- */
   carouselSection: {
-    height: 280,
+    flex: 1,
     justifyContent: 'center',
     width: '100%',
-    marginVertical: 10,
     zIndex: 10,
   },
   carouselScrollView: {
@@ -1217,30 +1216,5 @@ const styles = StyleSheet.create({
     backgroundColor: '#6B8F5E',
     width: 24,
     borderRadius: 4,
-  },
-  goalPeekingMascot: {
-    position: 'absolute',
-    top: -24, // Shifted higher up
-    left: 0,
-    width: width * 0.35, // Balanced peeking size for Aava (without empty space)
-    height: width * 0.35 * (325 / 165), // Ratio of cropped avatar_peeking (165x325)
-    zIndex: 1, // Sits above background but below interaction elements
-  },
-  goalSpeechBubbleRight: {
-    position: 'absolute',
-    top: 50, // Horizontally aligned with the cyan band in her hat
-    right: 16,
-    width: width * 0.54, // Sits on the right half of the screen
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    shadowColor: '#1C1917',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
   },
 });
