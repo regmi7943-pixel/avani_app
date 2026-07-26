@@ -6644,6 +6644,7 @@ function FarmAlertsModalOverlay({
   isDarkMode: boolean;
   calculateDynamicHealthScore: (f: Field) => number;
 }) {
+  const insets = useSafeAreaInsets();
   const [testing, setTesting] = useState(false);
   const [aiResult, setAiResult] = useState<DynamicWeatherAlert | null>(null);
 
@@ -6684,7 +6685,9 @@ function FarmAlertsModalOverlay({
             backgroundColor: isDarkMode ? '#1e2920' : '#FFFFFF',
             borderTopLeftRadius: 28,
             borderTopRightRadius: 28,
-            padding: 24,
+            paddingTop: 24,
+            paddingHorizontal: 24,
+            paddingBottom: Math.max(24, insets.bottom + 16),
             maxHeight: '80%',
             gap: 16,
           }}
