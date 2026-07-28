@@ -21,10 +21,12 @@ def extract_audio(url: str):
     try:
         ydl_opts = {
             'format': 'ba[ext=m4a]/ba/b',
-            'extractor_args': {'youtube': {'player_client': ['mweb', 'tv']}},
+            'extractor_args': {'youtube': {'player_client': ['mweb', 'tv', 'web_creator']}},
             'quiet': True,
             'no_warnings': True,
         }
+        if os.path.exists('cookies.txt'):
+            ydl_opts['cookiefile'] = 'cookies.txt'
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             audio_url = info.get('url')
