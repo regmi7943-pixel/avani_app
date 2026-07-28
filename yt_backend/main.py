@@ -161,9 +161,9 @@ Return raw JSON ONLY. No markdown wrappers.
                     "Content-Type": "application/json"
                 },
                 json={
-                    "model": "llama-3.3-70b-versatile",
+                    "model": "llama-3.1-8b-instant",
                     "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.2
+                    "temperature": 0.1
                 }
             )
 
