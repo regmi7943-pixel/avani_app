@@ -52,14 +52,15 @@ def youtube_full_analysis(url: str):
     with tempfile.TemporaryDirectory() as temp_dir:
         audio_path = os.path.join(temp_dir, "audio.mp3")
 
-        # STEP 1: Download Audio with yt-dlp
+        # STEP 1: Download Audio with yt-dlp (Optimized for speed)
         ydl_opts = {
-            'format': 'bestaudio/best',
+            'format': 'ba[ext=m4a]/ba/b',
             'outtmpl': audio_path,
+            'download_ranges': yt_dlp.utils.download_range_func(None, [(0, 180)]),
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': 'mp3',
-                'preferredquality': '128',
+                'preferredquality': '64',
             }],
             'quiet': True,
         }

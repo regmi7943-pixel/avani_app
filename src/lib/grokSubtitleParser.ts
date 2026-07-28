@@ -108,7 +108,7 @@ export async function parseYouTubeVideoDetailsWithGrokAI(
     console.log(`[Render Backend API] Requesting full AI analysis for ${video.id} from ${renderServerUrl}...`);
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 16000);
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
 
     const backendRes = await fetch(`${renderServerUrl}/youtube-full-analysis?url=${encodeURIComponent(videoWatchUrl)}`, {
       signal: controller.signal
