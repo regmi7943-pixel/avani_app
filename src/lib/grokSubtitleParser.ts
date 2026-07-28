@@ -108,14 +108,16 @@ export async function parseYouTubeVideoDetailsWithGrokAI(
   let fullDesc = video.subtitleEn || video.subtitleNe || '';
 
   try {
-    const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${video.id}&key=${GOOGLE_YOUTUBE_API_KEY}`;
-    const res = await fetch(url);
-    if (res.ok) {
-      const data = await res.json();
-      const item = data.items?.[0];
-      if (item?.snippet) {
-        fullTitle = item.snippet.title || fullTitle;
-        fullDesc = item.snippet.description || fullDesc;
+    if (GOOGLE_YOUTUBE_API_KEY) {
+      const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${video.id}&key=${GOOGLE_YOUTUBE_API_KEY}`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        const item = data.items?.[0];
+        if (item?.snippet) {
+          fullTitle = item.snippet.title || fullTitle;
+          fullDesc = item.snippet.description || fullDesc;
+        }
       }
     }
   } catch (err) {

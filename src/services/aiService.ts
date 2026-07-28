@@ -195,12 +195,18 @@ async function getFieldsContext(): Promise<string> {
 
     let context = 'Here is the farmer\'s current registered fields status:\n';
     fields.forEach((field, index) => {
-      let ageStr = 'Not planted yet (planned)';
-      if (field.planting_date && field.status !== 'planned') {
-        const pDate = new Date(field.planting_date);
-        const diff = today.getTime() - pDate.getTime();
-        const days = Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
-        ageStr = `${days} days since planting (Planted on ${field.planting_date})`;
+      const isPlanned = field.status === 'planned';
+      let stageInfo = '';
+      if (isPlanned) {
+        stageInfo = `⚠️ PLANNED / UNPLANTED FIELD (Muddy / Prepared Land stage). NO CROPS PLANTED YET. Sowing is scheduled for the future.`;
+      } else {
+        let days = 0;
+        if (field.planting_date) {
+          const pDate = new Date(field.planting_date);
+          const diff = today.getTime() - pDate.getTime();
+          days = Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
+        }
+        stageInfo = `ACTIVE GROWING CROP (${days} days since planting, planted on ${field.planting_date || 'recent'}).`;
       }
 
       // Calculate center coordinate of the boundaries
@@ -221,14 +227,12 @@ async function getFieldsContext(): Promise<string> {
       const soilProps = getEstimatedSoilProperties(lat, lon);
 
       context += `${index + 1}. Field Name: "${field.name}"\n`;
-      context += `   - Field Center Coordinates: Lat ${lat.toFixed(5)}, Lon ${lon.toFixed(5)}\n`;
-      context += `   - Crop Type: ${field.crop_type}\n`;
+      context += `   - Field Growth Stage & Status: ${stageInfo}\n`;
+      context += `   - Crop Type (Target/Active): ${field.crop_type}\n`;
       context += `   - Soil Classification: ${field.soil_type || soilProps.type || 'Unknown'}\n`;
       context += `     * Soil Chemistry: pH ${soilProps.ph.toFixed(1)}, Organic Matter ${soilProps.organic.toFixed(2)}%\n`;
       context += `     * Soil Texture: Clay ${soilProps.clay.toFixed(1)}%, Sand ${soilProps.sand.toFixed(1)}%, Silt ${soilProps.silt.toFixed(1)}%\n`;
       context += `   - Area Dimensions: ${field.area} ${field.area_unit.toUpperCase()}\n`;
-      context += `   - Planting Status: ${field.status || 'Active'}\n`;
-      context += `   - Timeline: ${ageStr}\n`;
       if (field.health_score) {
         context += `   - Soil Health Index: ${field.health_score}%\n`;
       }
@@ -1039,10 +1043,20 @@ Instructions:
   return fallbackAlerts(preferredLanguage || 'en');
 }
 
+export interface FieldDiagnosisItem {
+  fieldName: string;
+  cropType: string;
+  healthScore: number;
+  riskLevel: 'High Risk' | 'Moderate Risk' | 'Low Risk' | 'Healthy';
+  diagnosis: string;
+  recommendations: string[];
+}
+
 export interface DynamicWeatherAlert {
   hasAlert: boolean;
   title?: string;
   body?: string;
+  fieldDiagnoses?: FieldDiagnosisItem[];
 }
 
 export async function generateDynamicWeatherAlert(
@@ -1050,27 +1064,50 @@ export async function generateDynamicWeatherAlert(
   preferredLanguage?: 'en' | 'ne'
 ): Promise<DynamicWeatherAlert> {
   const languagePrompt = preferredLanguage === 'ne' 
-    ? "Return the title and body entirely in Nepali language."
-    : "Return the title and body in English.";
+    ? "Return all titles, bodies, diagnoses, and recommendations entirely in Nepali language (नेपाली)."
+    : "Return all titles, bodies, diagnoses, and recommendations in English.";
 
-  const prompt = `You are a crop weather advisory expert.
-Analyze the weather forecast for the following fields:
+  const prompt = `You are a senior agronomist and crop diagnostic specialist for Nepal/South Asia.
+Analyze the following detailed farm telemetry and weather data for registered fields:
+
 ${combinedReport}
 
-Evaluate if there are any specific risks for each crop under these weather conditions (e.g. frost, blight/fungus due to high humidity and warmth, storm lodging, extreme heat stress, waterlogging).
-If there is NO stress or risk for any field, return a JSON object with hasAlert=false.
-If there is a risk, return a JSON object with hasAlert=true, and generate a very short, catchy consolidated alert title and alert body.
-Guidelines:
-- The title MUST be extremely short, direct, and under 5 words (e.g., "Frost Alert" or "Storm Warning").
-- The body MUST be under 15 words, catchy, clear, and specify the warning and action (e.g., "Frost tonight at North Field. Cover your crops!").
-- If multiple fields have risks, select the most critical threat or combine them into one concise warning sentence.
-- ${languagePrompt}
+Perform a rigorous, field-by-field diagnostic assessment of crop health, soil conditions, and weather risks (e.g. waterlogging, root rot, fungal blight due to humidity, nutrient leaching, heat stress, pest vulnerability).
 
-Return ONLY a raw valid JSON object with exactly these fields (do not wrap in markdown code blocks or add extra text):
+Instructions:
+1. CRITICAL FIELD STAGE RULES:
+   - Check whether each field is "PLANNED / UNPLANTED" or "ACTIVE GROWING CROP".
+   - If a field is "PLANNED / UNPLANTED" (muddy soil / pre-sowing phase):
+     * DO NOT report leaf blight, crop pests, or plant disease on non-existent growing plants!
+     * Diagnosis MUST state that the field is currently in the pre-sowing/muddy land stage.
+     * Recommendations MUST focus on pre-sowing steps: field leveling, boundary drainage trenching before heavy rain, mud puddling, and waiting for optimum moisture before sowing.
+   - If a field is "ACTIVE GROWING CROP":
+     * Provide full crop disease diagnosis, humidity/blight risks, and nutrient recommendations.
+2. Provide an overall executive title (under 6 words) and body (2 clear sentences summarizing overall farm condition).
+3. For EVERY registered field listed in the input report, generate a specific entry in "fieldDiagnoses":
+   - "fieldName": exact name of the field from input.
+   - "cropType": crop type.
+   - "healthScore": numeric health score percentage (e.g. 68).
+   - "riskLevel": "High Risk", "Moderate Risk", "Low Risk", or "Healthy".
+   - "diagnosis": Specific diagnostic explanation of the field's stage and health condition.
+   - "recommendations": An array of 2 to 3 highly specific, stage-appropriate actionable steps for the farmer.
+4. ${languagePrompt}
+
+Return ONLY a raw valid JSON object with this exact structure (do NOT include markdown code blocks or extra text):
 {
-  "hasAlert": boolean,
-  "title": string (only if hasAlert is true),
-  "body": string (only if hasAlert is true)
+  "hasAlert": true,
+  "title": string,
+  "body": string,
+  "fieldDiagnoses": [
+    {
+      "fieldName": string,
+      "cropType": string,
+      "healthScore": number,
+      "riskLevel": "High Risk" | "Moderate Risk" | "Low Risk" | "Healthy",
+      "diagnosis": string,
+      "recommendations": [string, string]
+    }
+  ]
 }`;
 
   // Try Groq first as primary AI provider
@@ -1088,7 +1125,7 @@ Return ONLY a raw valid JSON object with exactly these fields (do not wrap in ma
           messages: [
             { role: 'user', content: prompt }
           ],
-          temperature: 0.1,
+          temperature: 0.2,
           response_format: { type: "json_object" }
         }),
       });
@@ -1126,7 +1163,7 @@ Return ONLY a raw valid JSON object with exactly these fields (do not wrap in ma
           ],
           generationConfig: {
             responseMimeType: "application/json",
-            temperature: 0.1,
+            temperature: 0.2,
           }
         }),
       });

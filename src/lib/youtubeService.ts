@@ -460,6 +460,14 @@ export async function fetchGoogleYouTubeVideos(
     ? `Nepal ${searchQuery} farming guide` 
     : `Nepal ${cropKeywords}`;
 
+  if (!GOOGLE_YOUTUBE_API_KEY) {
+    console.log('[YouTube API Diagnostic] EXPO_PUBLIC_YOUTUBE_API_KEY is missing in .env. Using fallback verified catalog.');
+    const filteredVerified = cropFilter === 'all' 
+      ? VERIFIED_NEPAL_YOUTUBE_VIDEOS 
+      : VERIFIED_NEPAL_YOUTUBE_VIDEOS.filter(v => v.cropType === cropFilter);
+    return { items: filteredVerified.length > 0 ? filteredVerified : VERIFIED_NEPAL_YOUTUBE_VIDEOS };
+  }
+
   try {
     let url = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=50&q=${encodeURIComponent(qText)}&type=video&key=${GOOGLE_YOUTUBE_API_KEY}`;
     if (pageToken) {
@@ -470,6 +478,10 @@ export async function fetchGoogleYouTubeVideos(
 
     const res = await fetch(url);
     console.log(`[YouTube API Diagnostic] Response Status Code: ${res.status} ${res.statusText}`);
+
+    if (res.status === 403) {
+      console.warn('[YouTube API 403 Forbidden] YouTube API key quota exceeded or unenabled in Google Cloud Console. Falling back to verified Nepal video inventory.');
+    }
 
     if (res.ok) {
       const data = await res.json();

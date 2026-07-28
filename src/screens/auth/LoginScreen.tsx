@@ -14,6 +14,7 @@ const { width } = Dimensions.get('window');
 type RootStackParamList = {
   Login: undefined;
   SignUp: undefined;
+  ForgotPassword: undefined;
   OtpVerification: { email: string };
 };
 
@@ -217,7 +218,7 @@ export default function LoginScreen() {
             <View style={styles.inputGroup}>
               <View style={styles.passwordHeader}>
                 <Text style={styles.label}>{tLocal.passwordLabel}</Text>
-                <TouchableOpacity>
+                <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
                   <Text style={styles.forgotPassword}>{tLocal.forgotPassword}</Text>
                 </TouchableOpacity>
               </View>

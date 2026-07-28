@@ -13,6 +13,8 @@ import OnboardingScreen from './src/screens/auth/OnboardingScreen';
 import LoginScreen from './src/screens/auth/LoginScreen';
 import SignUpScreen from './src/screens/auth/SignUpScreen';
 import OtpVerificationScreen from './src/screens/auth/OtpVerificationScreen';
+import ForgotPasswordScreen from './src/screens/auth/ForgotPasswordScreen';
+import ResetPasswordOtpScreen from './src/screens/auth/ResetPasswordOtpScreen';
 import SuccessScreen from './src/screens/auth/SuccessScreen';
 
 import MainTabNavigator from './src/navigation/MainTabNavigator';
@@ -179,6 +181,8 @@ export default function App() {
                   <Stack.Screen name="Login" component={LoginScreen} />
                   <Stack.Screen name="SignUp" component={SignUpScreen} />
                   <Stack.Screen name="OtpVerification" component={OtpVerificationScreen} />
+                  <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+                  <Stack.Screen name="ResetPasswordOtp" component={ResetPasswordOtpScreen} />
                 </>
               )}
             </Stack.Navigator>

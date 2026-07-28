@@ -907,7 +907,7 @@ export default function AIAssistantScreen() {
           allowsRecordingIOS: true,
           playsInSilentModeIOS: true,
           shouldDuckAndroid: true,
-          stayActiveInBackground: false,
+          staysActiveInBackground: false,
         });
       } catch (e) {
         console.warn('Audio mode setup notice:', e);

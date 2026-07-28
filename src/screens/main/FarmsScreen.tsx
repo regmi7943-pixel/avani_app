@@ -17,11 +17,12 @@ import {
   ImageBackground,
   Animated,
   PanResponder,
-  StatusBar
+  StatusBar,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { WebView } from 'react-native-webview';
 import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../lib/ThemeContext';
 import { useLanguage } from '../../lib/LanguageContext';
@@ -3025,8 +3026,29 @@ const FarmsScreen = () => {
   const [selectedField, setSelectedField] = useState<Field | null>(null);
   const [selectedMasterclass, setSelectedMasterclass] = useState<MasterclassTopic | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [weatherData, setWeatherData] = useState<any | null>(null);
-  const [regionalWeather, setRegionalWeather] = useState<any | null>(null);
+  const DEFAULT_REGIONAL_WEATHER = {
+    temperature: 24,
+    windspeed: 12,
+    weathercode: 0,
+    precipitationProbability: 15,
+    past24hRain: '0.0',
+    cloudCover: 20,
+    soilMoisture: 38
+  };
+
+  const DEFAULT_FIELD_WEATHER = {
+    temperature: 24,
+    windspeed: 10,
+    weathercode: 0,
+    cloudCover: 15,
+    precipitationProbability: 10,
+    currentRainMm: '0.0',
+    past24hRain: '0.0',
+    soilMoisture: 42,
+  };
+
+  const [weatherData, setWeatherData] = useState<any>(DEFAULT_FIELD_WEATHER);
+  const [regionalWeather, setRegionalWeather] = useState<any>(DEFAULT_REGIONAL_WEATHER);
   const [alertModalVisible, setAlertModalVisible] = useState(false);
   const [checkoutModalVisible, setCheckoutModalVisible] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
@@ -3074,15 +3096,17 @@ const FarmsScreen = () => {
     }
   };
 
+  // Immediate weather fetch on mount so widget loads at 0ms
   useEffect(() => {
-    if (fields.length === 0) return;
-    const firstField = fields[0];
-    const bounds = firstField.boundaries;
     let lat = 27.7172;
     let lon = 85.3240;
-    if (bounds && Array.isArray(bounds) && bounds.length > 0) {
-      lat = bounds.reduce((acc, p) => acc + p.latitude, 0) / bounds.length;
-      lon = bounds.reduce((acc, p) => acc + p.longitude, 0) / bounds.length;
+    if (fields.length > 0) {
+      const firstField = fields[0];
+      const bounds = firstField.boundaries;
+      if (bounds && Array.isArray(bounds) && bounds.length > 0) {
+        lat = bounds.reduce((acc, p) => acc + p.latitude, 0) / bounds.length;
+        lon = bounds.reduce((acc, p) => acc + p.longitude, 0) / bounds.length;
+      }
     }
     fetchWeatherData(lat, lon);
   }, [fields]);
@@ -3114,7 +3138,7 @@ const FarmsScreen = () => {
 
   useEffect(() => {
     if (!selectedField) {
-      setWeatherData(null);
+      setWeatherData(DEFAULT_FIELD_WEATHER);
       return;
     }
     const bounds = selectedField.boundaries;
@@ -6659,10 +6683,28 @@ function FarmAlertsModalOverlay({
     setTesting(true);
     setAiResult(null);
     try {
-      let combinedReport = fields.map(f => `Field Name: "${f.name}" | Crop: ${f.crop_type} | Soil: ${f.soil_type || 'Loam'}`).join('\n');
+      let combinedReport = fields.map(f => {
+        const score = calculateDynamicHealthScore(f);
+        const isPlanned = f.status === 'planned';
+        return `Field Name: "${f.name}"
+- Field Growth Stage: ${isPlanned ? '⚠️ PLANNED / UNPLANTED FIELD (Muddy/Prepared Land Stage, Sowing Scheduled, NO CROPS PLANTED YET)' : 'ACTIVE GROWING CROP'}
+- Planned/Current Crop Type: ${f.crop_type}
+- Status: ${f.status}
+- Health Score: ${score}%
+- Soil Classification: ${f.soil_type || 'Loam'}
+- Planting Date: ${f.planting_date || 'Not set'}
+- Area: ${f.area} ${f.area_unit}`;
+      }).join('\n\n');
+
       if (regionalWeather) {
-        combinedReport += `\nRegional Weather: Temp ${regionalWeather.temperature}°C, Rain Prob ${regionalWeather.precipitationProbability}%, Soil Moisture ${regionalWeather.soilMoisture}%`;
+        combinedReport += `\n\nRegional Weather Forecast:
+- Temperature: ${regionalWeather.temperature}°C
+- Rain Chance: ${regionalWeather.precipitationProbability}%
+- Soil Moisture: ${regionalWeather.soilMoisture}%
+- Cloud Cover: ${regionalWeather.cloudCover}%
+- Wind Speed: ${regionalWeather.windspeed} km/h`;
       }
+
       const res = await generateDynamicWeatherAlert(combinedReport, isNe ? 'ne' : 'en');
       setAiResult(res);
     } catch (e: any) {
@@ -6688,7 +6730,7 @@ function FarmAlertsModalOverlay({
             paddingTop: 24,
             paddingHorizontal: 24,
             paddingBottom: Math.max(24, insets.bottom + 16),
-            maxHeight: '80%',
+            maxHeight: '82%',
             gap: 16,
           }}
         >
@@ -6714,39 +6756,99 @@ function FarmAlertsModalOverlay({
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={false}>
-            <View style={{ gap: 12 }}>
-              {/* Groq AI Analysis Card Result */}
+          <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+            <View style={{ gap: 14 }}>
+              {/* Groq AI Detailed Analysis Result */}
               {aiResult && (
                 <View
                   style={{
                     backgroundColor: isDarkMode ? '#1a3324' : '#ECFDF5',
-                    borderRadius: 16,
+                    borderRadius: 18,
                     borderWidth: 1.5,
                     borderColor: '#10B981',
-                    padding: 14,
-                    gap: 6,
+                    padding: 16,
+                    gap: 10,
                   }}
                 >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Ionicons name="sparkles" size={16} color="#059669" />
-                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#059669' }}>
-                      {isNe ? 'Groq AI प्रत्यक्ष विश्लेषण' : 'Groq AI Live Analysis'}
-                    </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Ionicons name="sparkles" size={18} color="#059669" />
+                      <Text style={{ fontSize: 14, fontWeight: '900', color: '#059669', letterSpacing: 0.5 }}>
+                        {isNe ? 'Groq AI प्रत्यक्ष स्वास्थ्य निदान' : 'Groq AI Live Health Diagnostic'}
+                      </Text>
+                    </View>
                   </View>
+
                   {aiResult.title ? (
-                    <Text style={{ fontSize: 14, fontWeight: '800', color: colors.text }}>
+                    <Text style={{ fontSize: 15, fontWeight: '800', color: colors.text }}>
                       {aiResult.title}
                     </Text>
                   ) : null}
-                  <Text style={{ fontSize: 12.5, color: colors.secondaryText, lineHeight: 17 }}>
-                    {aiResult.body || (aiResult.hasAlert 
-                      ? (isNe ? 'सक्रिय बाली जोखिम पत्ता लाग्यो।' : 'Active crop risk detected.')
-                      : (isNe ? 'सबै खेतहरू सुरक्षित र सामान्य अवस्थामा छन्।' : 'All registered fields are operating normally with stable weather.'))}
-                  </Text>
+
+                  {aiResult.body ? (
+                    <Text style={{ fontSize: 13, color: colors.secondaryText, lineHeight: 18 }}>
+                      {aiResult.body}
+                    </Text>
+                  ) : null}
+
+                  {/* Detailed Per-Field AI Breakdown */}
+                  {aiResult.fieldDiagnoses && aiResult.fieldDiagnoses.length > 0 && (
+                    <View style={{ gap: 10, marginTop: 4 }}>
+                      {aiResult.fieldDiagnoses.map((diag, index) => {
+                        const isHigh = diag.riskLevel === 'High Risk';
+                        const isMod = diag.riskLevel === 'Moderate Risk';
+                        const badgeBg = isHigh ? '#EF4444' : (isMod ? '#F59E0B' : '#10B981');
+                        const cardBg = isDarkMode ? '#13261b' : '#FFFFFF';
+                        const borderCol = isHigh ? '#FCA5A5' : (isMod ? '#FDE68A' : '#A7F3D0');
+
+                        return (
+                          <View
+                            key={index}
+                            style={{
+                              backgroundColor: cardBg,
+                              borderRadius: 14,
+                              borderWidth: 1.5,
+                              borderColor: borderCol,
+                              padding: 12,
+                              gap: 8,
+                            }}
+                          >
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <Text style={{ fontSize: 14, fontWeight: '800', color: colors.text, flex: 1 }} numberOfLines={1}>
+                                🌾 {diag.fieldName} ({diag.cropType})
+                              </Text>
+                              <View style={{ backgroundColor: badgeBg, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
+                                <Text style={{ color: '#FFF', fontSize: 10.5, fontWeight: '800' }}>
+                                  {diag.riskLevel} • {diag.healthScore}%
+                                </Text>
+                              </View>
+                            </View>
+
+                            <Text style={{ fontSize: 12.5, color: colors.text, fontWeight: '600', lineHeight: 17 }}>
+                              🔍 <Text style={{ fontWeight: '800' }}>{isNe ? 'स्वास्थ्य निदान:' : 'Diagnosis:'}</Text> {diag.diagnosis}
+                            </Text>
+
+                            {diag.recommendations && diag.recommendations.length > 0 && (
+                              <View style={{ backgroundColor: isDarkMode ? '#1e3325' : '#F9FAFB', padding: 8, borderRadius: 10, gap: 4 }}>
+                                <Text style={{ fontSize: 11, fontWeight: '800', color: COLORS.forest700, textTransform: 'uppercase' }}>
+                                  💡 {isNe ? 'सुझाइएको कदमहरू:' : 'Recommended Action Items:'}
+                                </Text>
+                                {diag.recommendations.map((rec, rIdx) => (
+                                  <Text key={rIdx} style={{ fontSize: 12, color: colors.secondaryText, lineHeight: 16 }}>
+                                    • {rec}
+                                  </Text>
+                                ))}
+                              </View>
+                            )}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  )}
                 </View>
               )}
-              {/* Field Specific Alerts */}
+
+              {/* Field Specific Alerts List */}
               {alertFields.length > 0 ? (
                 alertFields.map((field) => {
                   const score = calculateDynamicHealthScore(field);
