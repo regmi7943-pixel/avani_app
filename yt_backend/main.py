@@ -26,6 +26,9 @@ def extract_audio(url: str):
             'quiet': True,
             'no_warnings': True,
         }
+        if os.path.exists('cookies.txt'):
+            ydl_opts['cookiefile'] = 'cookies.txt'
+
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             audio_url = info.get('url')
@@ -57,7 +60,7 @@ def youtube_full_analysis(url: str):
         title = "YouTube Video"
         transcript = ""
 
-        # STEP 1: Download Audio with yt-dlp (Using Android/iOS client bypass)
+        # STEP 1: Download Audio with yt-dlp (Using Android/iOS client bypass & cookies)
         ydl_opts = {
             'format': 'ba[ext=m4a]/ba/b',
             'outtmpl': audio_path,
@@ -71,6 +74,8 @@ def youtube_full_analysis(url: str):
             }],
             'quiet': True,
         }
+        if os.path.exists('cookies.txt'):
+            ydl_opts['cookiefile'] = 'cookies.txt'
 
         download_success = False
         try:
