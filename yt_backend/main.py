@@ -20,7 +20,9 @@ def extract_audio(url: str):
     """Returns direct audio stream URL and video metadata."""
     try:
         ydl_opts = {
-            'format': 'bestaudio/best',
+            'format': 'ba[ext=m4a]/ba/b',
+            'extractor_args': {'youtube': {'player_client': ['android', 'ios']}},
+            'http_headers': {'User-Agent': 'com.google.android.youtube/19.09.37 (Linux; U; Android 11; US) gzip'},
             'quiet': True,
             'no_warnings': True,
         }
