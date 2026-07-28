@@ -52,11 +52,16 @@ def youtube_full_analysis(url: str):
     with tempfile.TemporaryDirectory() as temp_dir:
         audio_path = os.path.join(temp_dir, "audio.mp3")
 
-        # STEP 1: Download Audio with yt-dlp (Optimized for speed)
+        title = "YouTube Video"
+        transcript = ""
+
+        # STEP 1: Download Audio with yt-dlp (Using Android/iOS client bypass)
         ydl_opts = {
             'format': 'ba[ext=m4a]/ba/b',
             'outtmpl': audio_path,
             'download_ranges': yt_dlp.utils.download_range_func(None, [(0, 180)]),
+            'extractor_args': {'youtube': {'player_client': ['android', 'ios', 'web_creator']}},
+            'http_headers': {'User-Agent': 'com.google.android.youtube/19.09.37 (Linux; U; Android 11; US) gzip'},
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': 'mp3',
@@ -65,29 +70,50 @@ def youtube_full_analysis(url: str):
             'quiet': True,
         }
 
+        download_success = False
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
                 title = info.get('title', 'YouTube Video')
+                download_success = True
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"yt-dlp audio extraction failed: {str(e)}")
+            print(f"Audio download notice: {e}. Attempting TimedText transcript fallback...")
 
-        # STEP 2: Transcribe Spoken Audio with Groq Whisper API
-        try:
-            with open(audio_path, "rb") as audio_file:
-                whisper_res = requests.post(
-                    "https://api.groq.com/openai/v1/audio/transcriptions",
-                    headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
-                    files={"file": ("audio.mp3", audio_file, "audio/mp3")},
-                    data={"model": "whisper-large-v3-turbo", "response_format": "json"}
-                )
+        # STEP 2: Transcribe Spoken Audio with Groq Whisper API (or TimedText fallback)
+        if download_success and os.path.exists(audio_path):
+            try:
+                with open(audio_path, "rb") as audio_file:
+                    whisper_res = requests.post(
+                        "https://api.groq.com/openai/v1/audio/transcriptions",
+                        headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
+                        files={"file": ("audio.mp3", audio_file, "audio/mp3")},
+                        data={"model": "whisper-large-v3-turbo", "response_format": "json"}
+                    )
 
-            if whisper_res.status_code != 200:
-                raise HTTPException(status_code=500, detail=f"Whisper Error: {whisper_res.text}")
+                if whisper_res.status_code == 200:
+                    transcript = whisper_res.json().get("text", "")
+            except Exception as e:
+                print(f"Whisper transcription notice: {e}")
 
-            transcript = whisper_res.json().get("text", "")
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Speech transcription failed: {str(e)}")
+        # Fallback to TimedText API if audio stream was restricted
+        if not transcript:
+            try:
+                vid_id_match = re.search(r'(?:v=|\/)([0-9A-Za-z_-]{11})', url)
+                if vid_id_match:
+                    vid_id = vid_id_match.group(1)
+                    watch_res = requests.get(f"https://www.youtube.com/watch?v={vid_id}", headers={"User-Agent": "Mozilla/5.0"})
+                    if watch_res.ok and "captionTracks" in watch_res.text:
+                        match = re.search(r'https:\\\/\\\/www\.youtube\.com\\\/api\\\/timedtext[^\"]*', watch_res.text)
+                        if match:
+                            sub_url = match.group(0).replace(r'\u0026', '&').replace(r'\/', '/')
+                            sub_url = sub_url if 'fmt=json3' in sub_url else f"{sub_url}&fmt=json3"
+                            sub_res = requests.get(sub_url)
+                            if sub_res.ok:
+                                events = sub_res.json().get("events", [])
+                                words = [s.get("utf8", "").strip() for e in events for s in e.get("segs", []) if s.get("utf8")]
+                                transcript = " ".join([w for w in words if w])
+            except Exception as sub_err:
+                print(f"TimedText fallback notice: {sub_err}")
 
         # STEP 3: Summarize & Extract Methods with Groq Llama-3.3-70B
         prompt = f"""You are Avani AI's Master Agronomist.
