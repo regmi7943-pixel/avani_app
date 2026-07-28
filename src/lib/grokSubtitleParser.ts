@@ -87,12 +87,13 @@ export async function parseYouTubeVideoDetailsWithGrokAI(
 
   const cacheKey = `@avani_grok_sub_parse_v5_${video.id}`;
 
-  // 1. Check local AsyncStorage cache first
+  // 1. Check local AsyncStorage cache first for instant 0ms reload
   try {
     const cached = await AsyncStorage.getItem(cacheKey);
     if (cached) {
       const parsed = JSON.parse(cached);
       if (parsed && parsed.summaryEn && parsed.stepsEn && parsed.dosageTable) {
+        console.log(`[Cache HIT] Returning instant 0ms video analysis for ${video.id}`);
         return parsed;
       }
     }
@@ -100,7 +101,34 @@ export async function parseYouTubeVideoDetailsWithGrokAI(
     console.warn('Cache error in subtitle parser:', err);
   }
 
-  // 2. Fetch REAL Spoken Subtitles from YouTube TimedText API
+  // 2. Call live Render Microservice (yt-dlp + Groq Whisper + Groq Llama)
+  const renderServerUrl = process.env.EXPO_PUBLIC_YTDLP_SERVER_URL || 'https://avani-yt-backend.onrender.com';
+  try {
+    const videoWatchUrl = `https://www.youtube.com/watch?v=${video.id}`;
+    console.log(`[Render Backend API] Requesting full AI analysis for ${video.id} from ${renderServerUrl}...`);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 16000);
+
+    const backendRes = await fetch(`${renderServerUrl}/youtube-full-analysis?url=${encodeURIComponent(videoWatchUrl)}`, {
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (backendRes.ok) {
+      const data = await backendRes.json();
+      if (data.success && data.analysis && data.analysis.summaryEn && data.analysis.stepsEn && data.analysis.dosageTable) {
+        console.log(`[Render Backend SUCCESS] Successfully fetched live video analysis for ${video.id}!`);
+        await AsyncStorage.setItem(cacheKey, JSON.stringify(data.analysis)).catch(() => {});
+        return data.analysis;
+      }
+    }
+  } catch (backendErr) {
+    console.warn('[Render Backend Notice - Falling back to direct client Groq API]:', backendErr);
+  }
+
+  // 3. Fallback: Fetch REAL Spoken Subtitles directly from YouTube TimedText API
   let realSubtitleText = await fetchRealYouTubeSubtitles(video.id);
 
   // 3. Fetch rich snippet metadata from YouTube Data API as supplemental context
