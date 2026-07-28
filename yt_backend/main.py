@@ -10,7 +10,7 @@ app = FastAPI(title="Avani YouTube Audio & AI Analysis Microservice")
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 
-@app.get("/ping")
+@app.api_route("/ping", methods=["GET", "HEAD", "POST", "OPTIONS"])
 def ping():
     """Health check endpoint for UptimeRobot keep-alive pings."""
     return {"status": "alive", "service": "Avani YouTube AI Service"}
