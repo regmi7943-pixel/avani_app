@@ -19,14 +19,16 @@ def ping():
 def extract_audio(url: str):
     """Returns direct audio stream URL and video metadata."""
     try:
+        cookie_path = os.path.join(os.path.dirname(__file__), "cookies.txt")
         ydl_opts = {
             'format': 'ba[ext=m4a]/ba/b',
-            'extractor_args': {'youtube': {'player_client': ['mweb', 'tv', 'web_creator']}},
+            'http_headers': {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'},
             'quiet': True,
             'no_warnings': True,
         }
-        if os.path.exists('cookies.txt'):
-            ydl_opts['cookiefile'] = 'cookies.txt'
+        if os.path.exists(cookie_path):
+            ydl_opts['cookiefile'] = cookie_path
+
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             audio_url = info.get('url')
@@ -72,8 +74,9 @@ def youtube_full_analysis(url: str):
             }],
             'quiet': True,
         }
-        if os.path.exists('cookies.txt'):
-            ydl_opts['cookiefile'] = 'cookies.txt'
+        cookie_path = os.path.join(os.path.dirname(__file__), "cookies.txt")
+        if os.path.exists(cookie_path):
+            ydl_opts['cookiefile'] = cookie_path
 
         download_success = False
         try:
