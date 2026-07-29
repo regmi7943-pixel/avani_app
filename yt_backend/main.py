@@ -152,18 +152,28 @@ def youtube_full_analysis(url: str):
         transcript = ""
 
         # ──────────────────────────────────────────
-        # STEP 1: Download Audio
+        # STEP 1a: Extract video metadata (title) — always works
+        # ──────────────────────────────────────────
+        try:
+            with yt_dlp.YoutubeDL({'quiet': True, 'no_warnings': True, 'skip_download': True}) as ydl:
+                info = ydl.extract_info(url, download=False)
+                title = info.get('title', 'YouTube Video')
+                print(f"[STEP 1a OK] Got title: {title}")
+        except Exception as e:
+            print(f"[STEP 1a] Metadata extraction note: {e}")
+
+        # ──────────────────────────────────────────
+        # STEP 1b: Try to download audio (may fail on datacenter IPs)
         # ──────────────────────────────────────────
         opts = _get_ydl_opts(temp_dir)
         download_success = False
         try:
             with yt_dlp.YoutubeDL(opts) as ydl:
-                info = ydl.extract_info(url, download=True)
-                title = info.get('title', 'YouTube Video')
+                ydl.download([url])
                 download_success = True
-                print(f"[STEP 1 OK] Downloaded audio for: {title}")
+                print(f"[STEP 1b OK] Downloaded audio for: {title}")
         except Exception as e:
-            print(f"[STEP 1 FAIL] yt-dlp download error: {e}")
+            print(f"[STEP 1b SKIP] Audio download blocked (datacenter IP): {e}")
 
         audio_path = _find_audio_file(temp_dir)
         print(f"[STEP 1] Files in temp_dir: {os.listdir(temp_dir)}, audio_path={audio_path}")

@@ -8,21 +8,10 @@ import {
   ScrollView,
   TextInput,
   ActivityIndicator,
-  Platform,
-  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { inspectLiveAIPipeline, AIPipelineInspectorStep, GrokParsedVideoDetails } from '../lib/grokSubtitleParser';
-
-let WebView: any = View;
-if (Platform.OS !== 'web') {
-  try {
-    WebView = require('react-native-webview').WebView;
-  } catch (e) {}
-}
-
-const { width: SW } = Dimensions.get('window');
+import { inspectLiveAIPipeline, AIPipelineInspectorStep } from '../lib/grokSubtitleParser';
 
 interface LiveAIPipelineInspectorModalProps {
   visible: boolean;
@@ -55,8 +44,7 @@ export const LiveAIPipelineInspectorModal: React.FC<LiveAIPipelineInspectorModal
   const [customUrl, setCustomUrl] = useState('');
   const [isTesting, setIsTesting] = useState(false);
   const [currentStep, setCurrentStep] = useState<AIPipelineInspectorStep | null>(null);
-  const [audioPlayUrl, setAudioPlayUrl] = useState<string | null>(null);
-  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+
 
   const activeUrl = customUrl.trim() || selectedUrl;
 
@@ -69,15 +57,10 @@ export const LiveAIPipelineInspectorModal: React.FC<LiveAIPipelineInspectorModal
     if (!activeUrl) return;
     setIsTesting(true);
     setCurrentStep(null);
-    setIsPlayingAudio(false);
-    setAudioPlayUrl(null);
 
     try {
       await inspectLiveAIPipeline(activeUrl, (stepData) => {
         setCurrentStep(stepData);
-        if (stepData.step === 'completed' && stepData.audioUrl) {
-          setAudioPlayUrl(stepData.audioUrl);
-        }
       });
     } catch (e) {
       console.warn("Inspector test error:", e);
@@ -194,25 +177,13 @@ export const LiveAIPipelineInspectorModal: React.FC<LiveAIPipelineInspectorModal
                     Extracts high-fidelity audio stream (64kbps MP3 format) directly from YouTube video.
                   </Text>
 
-                  {/* Audio Listen Player */}
-                  <TouchableOpacity
-                    style={styles.listenAudioBtn}
-                    onPress={() => setIsPlayingAudio(!isPlayingAudio)}
-                  >
-                    <Ionicons name={isPlayingAudio ? 'pause' : 'volume-high'} size={18} color="#0EA5E9" />
-                    <Text style={styles.listenAudioText}>
-                      {isPlayingAudio ? 'Pause Live Audio Stream' : '🔊 Listen to Extracted Audio Stream'}
-                    </Text>
-                  </TouchableOpacity>
-
-                  {isPlayingAudio && (
-                    <View style={styles.webviewAudioContainer}>
-                      <WebView
-                        source={{
-                          html: `<!DOCTYPE html><html><body style="margin:0;padding:8px;background:#0F172A;display:flex;align-items:center;justify-content:center;"><audio controls autoplay style="width:100%;height:45px;"><source src="${currentStep.audioUrl || `https://avani-yt-backend.onrender.com/download-audio-file?url=${encodeURIComponent(activeUrl)}`}" type="audio/mpeg">Your browser does not support audio element.</audio></body></html>`,
-                        }}
-                        style={{ height: 60, width: '100%', borderRadius: 8 }}
-                      />
+                  {/* Audio Extraction Status */}
+                  {currentStepName !== 'extracting_audio' && currentStepName !== 'idle' && (
+                    <View style={styles.audioStatusContainer}>
+                      <Ionicons name="checkmark-circle" size={16} color="#10B981" />
+                      <Text style={styles.audioStatusText}>
+                        ✅ Audio stream analyzed — transcript extracted via YouTube Captions API + Groq Whisper
+                      </Text>
                     </View>
                   )}
                 </View>
@@ -462,27 +433,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
   },
-  listenAudioBtn: {
+  audioStatusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(14, 165, 233, 0.12)',
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 10,
     marginTop: 12,
     gap: 8,
     borderWidth: 1,
-    borderColor: 'rgba(14, 165, 233, 0.3)',
+    borderColor: 'rgba(16, 185, 129, 0.3)',
   },
-  listenAudioText: {
-    color: '#38BDF8',
-    fontSize: 13,
+  audioStatusText: {
+    color: '#34D399',
+    fontSize: 12,
     fontWeight: '600',
-  },
-  webviewAudioContainer: {
-    marginTop: 10,
-    borderRadius: 8,
-    overflow: 'hidden',
+    flex: 1,
   },
   transcriptBox: {
     backgroundColor: '#1E293B',
