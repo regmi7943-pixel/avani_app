@@ -95,14 +95,14 @@ export async function parseYouTubeVideoDetailsWithGrokAI(
     return getDefaultParsedDetails(video);
   }
 
-  const cacheKey = `@avani_grok_sub_parse_v5_${video.id}`;
+  const cacheKey = `@avani_grok_sub_parse_v6_${video.id}`;
 
   // 1. Check local AsyncStorage cache first for instant 0ms reload
   try {
     const cached = await AsyncStorage.getItem(cacheKey);
     if (cached) {
       const parsed = JSON.parse(cached);
-      if (parsed && parsed.summaryEn && parsed.stepsEn && parsed.dosageTable) {
+      if (parsed && parsed.summaryEn && parsed.stepsEn) {
         console.log(`[Cache HIT] Returning instant 0ms video analysis for ${video.id}`);
         return parsed;
       }
@@ -619,4 +619,17 @@ export async function inspectLiveAIPipeline(
   };
   onProgress(fallbackResult);
   return fallbackResult;
+}
+
+export async function clearAllGrokVideoCache(): Promise<void> {
+  try {
+    const keys = await AsyncStorage.getAllKeys();
+    const grokKeys = keys.filter(k => k.startsWith('@avani_grok_sub_parse_') || k.includes('grok_sub_parse'));
+    if (grokKeys.length > 0) {
+      await AsyncStorage.multiRemove(grokKeys);
+      console.log(`[Cache Wiped] Successfully cleared ${grokKeys.length} cached video analyses.`);
+    }
+  } catch (err) {
+    console.warn('Failed to wipe Grok video cache:', err);
+  }
 }

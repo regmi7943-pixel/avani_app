@@ -231,60 +231,70 @@ def youtube_full_analysis(url: str):
                 print(f"[STEP 2 FALLBACK FAIL] TimedText error: {sub_err}")
 
         # ──────────────────────────────────────────
-        # STEP 3: Groq Llama 8B Instant (Adaptive Content Reasoning)
+        # STEP 3: Groq Llama 8B Instant (Master Agronomist RAG Knowledge Engine)
         # ──────────────────────────────────────────
-        prompt = f"""You are Avani AI's Master Agronomist.
-Analyze this YouTube video title and transcript:
+        prompt = f"""You are Avani AI's Master Agronomist and Expert Agricultural Analyst for Nepal.
+Analyze this YouTube video title and transcript carefully:
 Title: "{title}"
 Transcript: "{transcript[:3000]}"
 
-First, analyze the video's core topic and determine the most appropriate content type variant:
-- CROP_TUTORIAL: Standard planting/harvesting farming guide.
-- DISEASE_PEST_CURE: Identification, symptoms, chemical/organic cures, and spray dosages.
-- EQUIPMENT_REVIEW: Farm tools, mini-tillers, specs, pros/cons, maintenance.
-- MARKET_PRICES_STORAGE: Harvesting, post-harvest storage, market selling strategies.
-- COMPOST_ORGANIC_RECIPE: Jivamrita, vermicompost ingredients, preparation & application.
-- GOVT_SUBSIDY: Government krishi anudan, loan process, required documents.
-- SOIL_TESTING: Soil pH, lime treatment, organic matter improvement.
-- LIVESTOCK_POULTRY: Animal care, feed nutrition, disease prevention.
-- SEED_GERMINATION: Seed treatment, germination test, nursery care.
-- SEASONAL_CALENDAR: Planting calendar, monsoon planning, weather precautions.
+CRITICAL DOMAIN RULES:
+1. IF the video is about GOAT / POULTRY / LIVESTOCK / BEEKEEPING / FISH:
+   - Set "variantType": "LIVESTOCK_POULTRY".
+   - DO NOT invent crop fertilizer dosages. Set "basalEn": "N/A - Livestock Care", "basalNe": "लागू हुँदैन - पशुपालन".
+   - In "specializedSection", provide exact feed nutrition, breed recommendations, vaccination schedule, and shed care.
+2. IF the video is about FARM MACHINERY / MINI TILLER / POWER WEEDER / TOOLS:
+   - Set "variantType": "EQUIPMENT_REVIEW".
+   - Set "basalEn": "N/A - Farm Machinery", "basalNe": "लागू हुँदैन - कृषि यन्त्र".
+   - In "specializedSection", provide engine HP, fuel consumption per hour, pros/cons, and maintenance tips.
+3. IF the video is about DISEASE / PEST CONTROL / FUNGCIDE:
+   - Set "variantType": "DISEASE_PEST_CURE".
+   - In "specializedSection", provide disease symptoms, chemical spray dosage (e.g. Mancozeb/Imidacloprid), and organic remedies.
+4. IF the video is about CROP PLANTING / HARVESTING (Rice, Maize, Wheat, Potato, Mustard, Vegetables, Cardamom, Ginger):
+   - Set "variantType": "CROP_TUTORIAL".
+   - Provide exact DAP, Urea, Potash fertilizer dosages per Ropani (500 sq m) in "dosageTable".
+5. IF the video is about COMPOST / JIVAMRITA / ORGANIC RECIPE:
+   - Set "variantType": "COMPOST_ORGANIC_RECIPE".
+   - In "specializedSection", provide raw ingredients list, fermentation days, and field application rate per ropani.
+6. IF the video is about GOVERNMENT SUBSIDY / LOANS / ANUDAN:
+   - Set "variantType": "GOVT_SUBSIDY".
+   - In "specializedSection", provide subsidy %, eligibility criteria, required documents, and application office.
 
-Return a JSON object matching this structure:
+Return a JSON object matching this exact structure:
 {{
   "title": "{title}",
-  "variantType": "CROP_TUTORIAL",
-  "reasoning": "1-sentence explanation of why this video fits this specific variant.",
-  "summaryEn": "Detailed 2-sentence summary in English.",
-  "summaryNe": "विस्तृत २-वाक्यको सारांश (नेपालीमा)।",
+  "variantType": "CROP_TUTORIAL | LIVESTOCK_POULTRY | EQUIPMENT_REVIEW | DISEASE_PEST_CURE | COMPOST_ORGANIC_RECIPE | GOVT_SUBSIDY | MARKET_PRICES_STORAGE | SOIL_TESTING",
+  "reasoning": "1 clear sentence explaining why this video fits this specific domain.",
+  "summaryEn": "Detailed 2-sentence summary of what this video teaches in English.",
+  "summaryNe": "यस भिडियोले सिकाउने विस्तृत २-वाक्यको सारांश (नेपालीमा)।",
   "keyTakeawaysEn": ["Takeaway 1...", "Takeaway 2..."],
   "keyTakeawaysNe": ["मुख्य कुरा १...", "मुख्य कुरा २..."],
   "stepsEn": [
-    "Step 1: Land prep / seed selection method...",
-    "Step 2: Planting / spacing method...",
-    "Step 3: Fertilizer / irrigation method...",
-    "Step 4: Pest control / harvesting method..."
+    "Step 1: First action...",
+    "Step 2: Second action...",
+    "Step 3: Third action...",
+    "Step 4: Fourth action..."
   ],
   "stepsNe": [
-    "पाइला १: माटो तयारी र बीउ छनोट...",
-    "पाइला २: रोप्ने तरिका र दुरी...",
-    "पाइला ३: मल र सिँचाइ तरिका...",
-    "पाइला ४: रोग र कीरा नियन्त्रण..."
+    "पाइला १: पहिलो कार्य...",
+    "पाइला २: दोस्रो कार्य...",
+    "पाइला ३: तेस्रो कार्य...",
+    "पाइला ४: चौथो कार्य..."
   ],
   "dosageTable": {{
-    "unit": "Per Ropani / Per Plant",
-    "basalEn": "Basal fertilizer or primary dosage...",
-    "basalNe": "आधार मल / मुख्य परिमाण (नेपालीमा)...",
-    "topDressEn": "Top-dressing or secondary treatment...",
-    "topDressNe": "थप मल / दोस्रो उपचार (नेपालीमा)...",
-    "sprayEn": "Spray chemical/fungicide or maintenance rate...",
-    "sprayNe": "विषादी / स्प्रे परिमाण (नेपालीमा)..."
+    "unit": "Per Ropani / Per Animal / Per Machine",
+    "basalEn": "Basal fertilizer or primary dosage (or N/A for non-crops)",
+    "basalNe": "आधार मल वा मुख्य परिमाण (नेपालीमा)",
+    "topDressEn": "Top-dressing or secondary care",
+    "topDressNe": "थप मल वा दोस्रो स्याहार (नेपालीमा)",
+    "sprayEn": "Spray chemical/fungicide or maintenance rate",
+    "sprayNe": "विषादी / स्प्रे परिमाण (नेपालीमा)"
   }},
   "specializedSection": {{
-    "titleEn": "Specialized Field Guidance",
-    "titleNe": "विशेष क्षेत्र निर्देशिका",
-    "contentEn": "Tailored actionable advice based on video intent...",
-    "contentNe": "भिडियो अनुसारको व्यावहारिक सल्लाह (नेपालीमा)..."
+    "titleEn": "Domain-Specific Technical Guidance",
+    "titleNe": "विषयगत प्राविधिक निर्देशिका",
+    "contentEn": "Detailed specialized advice tailored to this exact video...",
+    "contentNe": "यस भिडियोको विषय अनुसारको विशेष व्यावहारिक सल्लाह (नेपालीमा)..."
   }},
   "precautionsEn": ["Precaution 1...", "Precaution 2..."],
   "precautionsNe": ["सावधानी १...", "सावधानी २..."]
