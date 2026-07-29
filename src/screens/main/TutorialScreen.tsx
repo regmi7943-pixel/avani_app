@@ -27,6 +27,7 @@ import { fetchGoogleYouTubeVideos, YouTubeFarmingItem } from '../../lib/youtubeS
 import { getDailyGrokVideoRecommendation, GrokMatchedVideoResult } from '../../lib/grokVideoRecommender';
 import { filterYouTubeVideosWithGrokAI } from '../../lib/grokVideoCurator';
 import { parseYouTubeVideoDetailsWithGrokAI, GrokParsedVideoDetails } from '../../lib/grokSubtitleParser';
+import { LiveAIPipelineInspectorModal } from '../../components/LiveAIPipelineInspectorModal';
 let WebView: any = View;
 if (Platform.OS !== 'web') {
   try {
@@ -604,6 +605,7 @@ export default function TutorialScreen() {
 
   const [parsedDetails, setParsedDetails] = useState<GrokParsedVideoDetails | null>(null);
   const [isParsingSubtitles, setIsParsingSubtitles] = useState<boolean>(false);
+  const [showInspectorModal, setShowInspectorModal] = useState<boolean>(false);
 
   // Trigger Grok AI Subtitle & Transcript Parser when activeGuideModal opens
   useEffect(() => {
@@ -834,13 +836,17 @@ export default function TutorialScreen() {
           </Text>
         </View>
 
-        {/* Center: Small Tutorial Pill Badge */}
-        <View style={[styles.tutorialCenterPill, { backgroundColor: isDarkMode ? 'rgba(76,175,80,0.18)' : '#eaf6f0', borderColor: colors.brandGreen }]}>
-          <Ionicons name="play-circle" size={12} color={colors.brandGreen} />
-          <Text style={[styles.tutorialCenterText, { color: colors.brandGreen }]}>
-            {language === 'ne' ? 'ट्युटोरियल' : 'TUTORIAL'}
+        {/* Center: Small Tutorial Pill Badge & AI Pipeline Inspector Button */}
+        <TouchableOpacity
+          style={[styles.tutorialCenterPill, { backgroundColor: 'rgba(16,185,129,0.18)', borderColor: '#10B981' }]}
+          onPress={() => setShowInspectorModal(true)}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="flask" size={13} color="#10B981" />
+          <Text style={[styles.tutorialCenterText, { color: '#10B981', fontWeight: '800' }]}>
+            🧪 TEST AI PIPELINE
           </Text>
-        </View>
+        </TouchableOpacity>
 
         {/* Right: Notifications + Avatar */}
         <View style={styles.headerRight}>
@@ -1343,6 +1349,12 @@ export default function TutorialScreen() {
           </View>
         </Modal>
       )}
+
+      {/* Live AI Pipeline Inspector & Testing Lab Modal */}
+      <LiveAIPipelineInspectorModal
+        visible={showInspectorModal}
+        onClose={() => setShowInspectorModal(false)}
+      />
     </SafeAreaView>
   );
 }
