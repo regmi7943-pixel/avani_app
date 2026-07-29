@@ -37,37 +37,13 @@ if (Platform.OS !== 'web') {
 
 const { width: SW } = Dimensions.get('window');
 
-function getEmbedHtml(youtubeId?: string, rawUrl?: string): string {
+function getVideoId(youtubeId?: string, rawUrl?: string): string {
   let id = youtubeId || '';
   if (!id && rawUrl) {
     const match = rawUrl.match(/(?:v=|\/embed\/|\/watch\?v=|\/v\/|youtu\.be\/|\/shorts\/)([a-zA-Z0-9_-]{11})/);
     if (match && match[1]) id = match[1];
   }
-  if (!id) id = 'L2zFX4uWFic';
-  const embedUrl = `https://www.youtube.com/embed/${id}?autoplay=1&playsinline=1&enablejsapi=1&origin=http://localhost&rel=0&modestbranding=1`;
-  
-  return `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-      <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body, html { width: 100%; height: 100%; background-color: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; }
-        iframe { width: 100%; height: 100%; border: 0; }
-      </style>
-    </head>
-    <body>
-      <iframe 
-        src="${embedUrl}" 
-        frameborder="0" 
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
-        allowfullscreen>
-      </iframe>
-    </body>
-    </html>
-  `;
+  return id || 'L2zFX4uWFic';
 }
 
 const SkeletonHeroCard = ({ isDarkMode }: { isDarkMode: boolean }) => {
@@ -1126,24 +1102,38 @@ export default function TutorialScreen() {
 
             <ScrollView contentContainerStyle={{ paddingBottom: 50 }} showsVerticalScrollIndicator={false}>
               
-              {/* Real Video Player Component (WebView HTML Embed with localhost origin - Fixes Error 153) */}
+              {/* Real Video Player Component (Direct HTTPS URI with YouTube Referer - Bypasses Error 153/152-4) */}
               <View style={styles.videoPlayerContainer}>
                 {isPlayingVideo ? (
                   <View style={{ width: '100%', height: 220, backgroundColor: '#000' }}>
-                    <WebView
-                      source={{
-                        html: getEmbedHtml(activeGuideModal.youtubeId, activeGuideModal.videoUrl),
-                        baseUrl: 'http://localhost'
-                      }}
-                      style={{ width: '100%', height: 220 }}
-                      originWhitelist={['*']}
-                      javaScriptEnabled={true}
-                      domStorageEnabled={true}
-                      allowsInlineMediaPlayback={true}
-                      mediaPlaybackRequiresUserAction={false}
-                      allowsFullscreenVideo={true}
-                      userAgent="Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Mobile Safari/537.36"
-                    />
+                    {Platform.OS === 'web' ? (
+                      <iframe
+                        width="100%"
+                        height="220"
+                        src={`https://www.youtube.com/embed/${getVideoId(activeGuideModal.youtubeId, activeGuideModal.videoUrl)}?playsinline=1&controls=1&rel=0`}
+                        style={{ border: 'none' }}
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    ) : (
+                      <WebView
+                        originWhitelist={['*']}
+                        source={{
+                          uri: `https://www.youtube.com/embed/${getVideoId(activeGuideModal.youtubeId, activeGuideModal.videoUrl)}?playsinline=1&controls=1&rel=0&enablejsapi=1`,
+                          headers: {
+                            'Referer': 'https://www.youtube.com/',
+                            'User-Agent': 'Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36',
+                          },
+                        }}
+                        userAgent="Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36"
+                        style={{ width: '100%', height: 220 }}
+                        allowsInlineMediaPlayback={true}
+                        mediaPlaybackRequiresUserAction={false}
+                        allowsFullscreenVideo={true}
+                        javaScriptEnabled={true}
+                        domStorageEnabled={true}
+                      />
+                    )}
                   </View>
                 ) : (
                   <ImageBackground
