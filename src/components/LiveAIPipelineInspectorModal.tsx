@@ -151,19 +151,23 @@ export const LiveAIPipelineInspectorModal: React.FC<LiveAIPipelineInspectorModal
                 <iframe
                   width="100%"
                   height="210"
-                  src={`https://www.youtube.com/embed/${extractId(activeUrl)}?autoplay=0&playsinline=1&rel=0`}
+                  src={`https://www.youtube-nocookie.com/embed/${extractId(activeUrl)}?autoplay=0&playsinline=1&enablejsapi=1&origin=https://www.youtube.com&widget_referrer=https://www.youtube.com`}
                   style={{ border: 'none', borderRadius: 12 }}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
                 />
               ) : (
                 <WebView
+                  originWhitelist={['*']}
                   source={{
-                    html: `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"></head><body style="margin:0;padding:0;background:#0F172A;display:flex;justify-content:center;align-items:center;"><iframe width="100%" height="200" src="https://www.youtube.com/embed/${extractId(activeUrl)}?autoplay=0&playsinline=1&rel=0" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="border-radius:12px;"></iframe></body></html>`,
+                    html: `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body{margin:0;padding:0;background:#0F172A;display:flex;justify-content:center;align-items:center;height:100vh;}iframe{width:100%;height:100%;border:none;border-radius:12px;}</style></head><body><iframe src="https://www.youtube-nocookie.com/embed/${extractId(activeUrl)}?autoplay=0&playsinline=1&enablejsapi=1&origin=https://www.youtube.com&widget_referrer=https://www.youtube.com" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></body></html>`,
+                    baseUrl: 'https://www.youtube.com',
                   }}
                   style={{ height: 210, width: '100%', borderRadius: 12 }}
                   allowsInlineMediaPlayback
                   mediaPlaybackRequiresUserAction={false}
+                  javaScriptEnabled
+                  domStorageEnabled
                 />
               )}
             </View>
