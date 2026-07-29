@@ -151,7 +151,7 @@ export const LiveAIPipelineInspectorModal: React.FC<LiveAIPipelineInspectorModal
                 <iframe
                   width="100%"
                   height="210"
-                  src={`https://www.youtube-nocookie.com/embed/${extractId(activeUrl)}?autoplay=0&playsinline=1&enablejsapi=1&origin=https://www.youtube.com&widget_referrer=https://www.youtube.com`}
+                  src={`https://www.youtube.com/embed/${extractId(activeUrl)}?playsinline=1&controls=1&rel=0`}
                   style={{ border: 'none', borderRadius: 12 }}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
@@ -160,14 +160,14 @@ export const LiveAIPipelineInspectorModal: React.FC<LiveAIPipelineInspectorModal
                 <WebView
                   originWhitelist={['*']}
                   source={{
-                    html: `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body{margin:0;padding:0;background:#0F172A;display:flex;justify-content:center;align-items:center;height:100vh;}iframe{width:100%;height:100%;border:none;border-radius:12px;}</style></head><body><iframe src="https://www.youtube-nocookie.com/embed/${extractId(activeUrl)}?autoplay=0&playsinline=1&enablejsapi=1&origin=https://www.youtube.com&widget_referrer=https://www.youtube.com" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></body></html>`,
-                    baseUrl: 'https://www.youtube.com',
+                    html: `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"><style>*{margin:0;padding:0;box-sizing:border-box;}body{background:#0F172A;overflow:hidden;}#player{width:100vw;height:100vh;}</style></head><body><div id="player"></div><script src="https://www.youtube.com/iframe_api"></script><script>var player;function onYouTubeIframeAPIReady(){player=new YT.Player('player',{videoId:'${extractId(activeUrl)}',playerVars:{'playsinline':1,'controls':1,'rel':0,'modestbranding':1}});}</script></body></html>`,
                   }}
                   style={{ height: 210, width: '100%', borderRadius: 12 }}
                   allowsInlineMediaPlayback
                   mediaPlaybackRequiresUserAction={false}
                   javaScriptEnabled
                   domStorageEnabled
+                  scrollEnabled={false}
                 />
               )}
             </View>
