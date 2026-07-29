@@ -16,7 +16,7 @@ def ping():
     """Health check endpoint for UptimeRobot keep-alive pings."""
     return {"status": "alive", "service": "Avani YouTube AI Service"}
 
-@app.get("/download-audio-file")
+@app.api_route("/download-audio-file", methods=["GET", "HEAD"])
 def download_audio_file(url: str):
     """Downloads audio via yt-dlp and serves the raw MP3 binary file directly."""
     temp_dir = tempfile.mkdtemp()
