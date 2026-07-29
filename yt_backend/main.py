@@ -75,9 +75,10 @@ def _get_ydl_opts(temp_dir: str, outtmpl_name: str = "audio") -> dict:
         'format': 'ba[ext=m4a]/ba/b',
         'outtmpl': os.path.join(temp_dir, outtmpl_name),
         'download_ranges': yt_dlp.utils.download_range_func(None, [(0, 180)]),
-        'extractor_args': {'youtube': {'player_client': ['ios', 'android', 'web_creator']}},
+        # web_creator + mweb work with browser cookies (ios/android need OAuth tokens)
+        'extractor_args': {'youtube': {'player_client': ['web_creator', 'mweb', 'web']}},
         'http_headers': {
-            'User-Agent': 'com.google.android.youtube/19.09.37 (Linux; U; Android 11; US) gzip',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
         },
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
@@ -86,6 +87,7 @@ def _get_ydl_opts(temp_dir: str, outtmpl_name: str = "audio") -> dict:
         }],
         'quiet': True,
         'no_warnings': True,
+        'socket_timeout': 30,
     }
     if os.path.exists(cookie_path):
         opts['cookiefile'] = cookie_path
