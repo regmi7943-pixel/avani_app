@@ -2,6 +2,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { YouTubeFarmingItem, GOOGLE_YOUTUBE_API_KEY } from './youtubeService';
+import { DynamicUIBlock } from '../components/DynamicAIVideoCard';
 
 const GROQ_API_KEY = process.env.EXPO_PUBLIC_GROQ_API_KEY || '';
 
@@ -12,6 +13,7 @@ export interface GrokParsedVideoDetails {
   summaryNe: string;
   keyTakeawaysEn?: string[];
   keyTakeawaysNe?: string[];
+  dynamicBlocks?: DynamicUIBlock[];
   stepsEn: string[];
   stepsNe: string[];
   dosageTable?: {

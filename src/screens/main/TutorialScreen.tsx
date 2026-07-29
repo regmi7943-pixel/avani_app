@@ -28,6 +28,7 @@ import { getDailyGrokVideoRecommendation, GrokMatchedVideoResult } from '../../l
 import { filterYouTubeVideosWithGrokAI } from '../../lib/grokVideoCurator';
 import { parseYouTubeVideoDetailsWithGrokAI, GrokParsedVideoDetails } from '../../lib/grokSubtitleParser';
 import { LiveAIPipelineInspectorModal } from '../../components/LiveAIPipelineInspectorModal';
+import { DynamicAIVideoCard } from '../../components/DynamicAIVideoCard';
 let WebView: any = View;
 if (Platform.OS !== 'web') {
   try {
@@ -1224,6 +1225,9 @@ export default function TutorialScreen() {
                       </View>
                     ) : null}
                   </View>
+
+                  {/* Render Dynamic AI Layout Component */}
+                  <DynamicAIVideoCard blocks={parsedDetails.dynamicBlocks} isDarkMode={isDarkMode} colors={colors} />
 
                   {/* Specialized Section for Livestock, Equipment, Disease, Market, etc. */}
                   {parsedDetails.specializedSection?.contentEn ? (
