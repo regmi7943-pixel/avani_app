@@ -182,7 +182,9 @@ export const LiveAIPipelineInspectorModal: React.FC<LiveAIPipelineInspectorModal
                     <View style={styles.audioStatusContainer}>
                       <Ionicons name="checkmark-circle" size={16} color="#10B981" />
                       <Text style={styles.audioStatusText}>
-                        ✅ Audio stream analyzed — transcript extracted via YouTube Captions API + Groq Whisper
+                        {currentStep?.audioUrl && !currentStep.audioUrl.includes('download-audio-file')
+                          ? '⚡ Client-Side Direct Audio Stream Extracted (Residential IP)'
+                          : '✅ Audio & Transcript Stream Analyzed (YouTube API + Groq Whisper)'}
                       </Text>
                     </View>
                   )}
