@@ -231,76 +231,59 @@ def youtube_full_analysis(url: str):
                 print(f"[STEP 2 FALLBACK FAIL] TimedText error: {sub_err}")
 
         # ──────────────────────────────────────────
-        # STEP 3: Groq Llama 8B Instant (Master Agronomist RAG Knowledge Engine)
+        # STEP 3: Groq Llama 8B Instant — BLOCK ARCHITECT AI
         # ──────────────────────────────────────────
-        prompt = f"""You are Avani AI's Master Agronomist and Expert Agricultural Analyst for Nepal.
-Analyze this YouTube video title and transcript carefully:
-Title: "{title}"
-Transcript: "{transcript[:3000]}"
+        prompt = f"""You are the Avani AI Block Architect. Your job: analyze a YouTube farming video and pick the PERFECT UI blocks to display.
 
-CRITICAL DOMAIN RULES:
-1. IF the video is about GOAT / POULTRY / LIVESTOCK / BEEKEEPING / FISH:
-   - Set "variantType": "LIVESTOCK_POULTRY".
-   - DO NOT invent crop fertilizer dosages. Set "basalEn": "N/A - Livestock Care", "basalNe": "लागू हुँदैन - पशुपालन".
-   - In "specializedSection", provide exact feed nutrition, breed recommendations, vaccination schedule, and shed care.
-2. IF the video is about FARM MACHINERY / MINI TILLER / POWER WEEDER / TOOLS:
-   - Set "variantType": "EQUIPMENT_REVIEW".
-   - Set "basalEn": "N/A - Farm Machinery", "basalNe": "लागू हुँदैन - कृषि यन्त्र".
-   - In "specializedSection", provide engine HP, fuel consumption per hour, pros/cons, and maintenance tips.
-3. IF the video is about DISEASE / PEST CONTROL / FUNGCIDE:
-   - Set "variantType": "DISEASE_PEST_CURE".
-   - In "specializedSection", provide disease symptoms, chemical spray dosage (e.g. Mancozeb/Imidacloprid), and organic remedies.
-4. IF the video is about CROP PLANTING / HARVESTING (Rice, Maize, Wheat, Potato, Mustard, Vegetables, Cardamom, Ginger):
-   - Set "variantType": "CROP_TUTORIAL".
-   - Provide exact DAP, Urea, Potash fertilizer dosages per Ropani (500 sq m) in "dosageTable".
-5. IF the video is about COMPOST / JIVAMRITA / ORGANIC RECIPE:
-   - Set "variantType": "COMPOST_ORGANIC_RECIPE".
-   - In "specializedSection", provide raw ingredients list, fermentation days, and field application rate per ropani.
-6. IF the video is about GOVERNMENT SUBSIDY / LOANS / ANUDAN:
-   - Set "variantType": "GOVT_SUBSIDY".
-   - In "specializedSection", provide subsidy %, eligibility criteria, required documents, and application office.
+TITLE: "{title}"
+TRANSCRIPT (first 3000 chars): "{transcript[:3000]}"
 
-Return a JSON object matching this exact structure:
+STEP 1 — REASON: Think about what this video teaches. What does a Nepali farmer NEED from this video? Is it a crop guide? Livestock? Business plan? Disease cure? Equipment?
+
+STEP 2 — PICK BLOCKS: Choose 5-8 blocks from this palette. ONLY pick blocks that are genuinely useful for THIS video. Never pad with irrelevant blocks.
+
+AVAILABLE BLOCKS (68 types):
+CONTENT: hero_summary, quote_highlight, fun_fact, video_context, narrator_note, key_takeaways, audio_snippet_transcript
+STEPS: step_list, numbered_process, quick_steps, decision_tree, flowchart_steps, troubleshooting_steps
+DATA: kv_table, comparison_table, dosage_chart, nutrient_table, cost_breakdown, roi_calculator, yield_estimate, measurement_specs, soil_test_report, feed_conversion_ratio
+LISTS: bullet_insights, checklist, pro_con_list, faq_list, do_dont_list, ingredient_list, tool_list, requirement_list, organic_cert_checklist
+TIMELINE: timeline, season_calendar, growth_stages, monthly_planner, harvest_schedule, gestation_timeline
+AGRICULTURE: breed_card, disease_card, pest_identification, soil_profile, irrigation_plan, seed_variety, fertilizer_schedule, spray_timing, weather_advisory, compost_recipe, aquaponics_setup, apiculture_hive_card, mushroom_flushing_card, weed_identification, pruning_guide
+BUSINESS: machine_specs, maintenance_checklist, market_price, subsidy_info, business_plan_summary, investment_table, loan_calculator
+ALERTS: warning_box, tip_box, success_box, info_box, metric_row, stat_highlight, badge_row, separator
+
+RULES:
+- ALWAYS start with hero_summary as the first block
+- For crop videos: use step_list, dosage_chart, fertilizer_schedule, season_calendar, yield_estimate, warning_box
+- For livestock: use breed_card, feed_conversion_ratio, gestation_timeline, cost_breakdown, checklist
+- For disease/pest: use disease_card OR pest_identification, spray_timing, dosage_chart, do_dont_list
+- For equipment: use machine_specs, pro_con_list, maintenance_checklist, cost_breakdown
+- For business: use business_plan_summary, investment_table, roi_calculator, timeline
+- For compost/organic: use compost_recipe OR ingredient_list, step_list, tip_box
+- For subsidy: use subsidy_info, checklist, requirement_list
+- NEVER use dosage_chart for livestock videos
+- NEVER use breed_card for crop videos
+- End with either tip_box or warning_box
+
+OUTPUT FORMAT — Return ONLY this JSON (no markdown, no explanation):
 {{
-  "title": "{title}",
-  "variantType": "CROP_TUTORIAL | LIVESTOCK_POULTRY | EQUIPMENT_REVIEW | DISEASE_PEST_CURE | COMPOST_ORGANIC_RECIPE | GOVT_SUBSIDY | MARKET_PRICES_STORAGE | SOIL_TESTING",
-  "reasoning": "1 clear sentence explaining why this video fits this specific domain.",
-  "summaryEn": "Detailed 2-sentence summary of what this video teaches in English.",
-  "summaryNe": "यस भिडियोले सिकाउने विस्तृत २-वाक्यको सारांश (नेपालीमा)।",
-  "keyTakeawaysEn": ["Takeaway 1...", "Takeaway 2..."],
-  "keyTakeawaysNe": ["मुख्य कुरा १...", "मुख्य कुरा २..."],
-  "stepsEn": [
-    "Step 1: First action...",
-    "Step 2: Second action...",
-    "Step 3: Third action...",
-    "Step 4: Fourth action..."
-  ],
-  "stepsNe": [
-    "पाइला १: पहिलो कार्य...",
-    "पाइला २: दोस्रो कार्य...",
-    "पाइला ३: तेस्रो कार्य...",
-    "पाइला ४: चौथो कार्य..."
-  ],
-  "dosageTable": {{
-    "unit": "Per Ropani / Per Animal / Per Machine",
-    "basalEn": "Basal fertilizer or primary dosage (or N/A for non-crops)",
-    "basalNe": "आधार मल वा मुख्य परिमाण (नेपालीमा)",
-    "topDressEn": "Top-dressing or secondary care",
-    "topDressNe": "थप मल वा दोस्रो स्याहार (नेपालीमा)",
-    "sprayEn": "Spray chemical/fungicide or maintenance rate",
-    "sprayNe": "विषादी / स्प्रे परिमाण (नेपालीमा)"
-  }},
-  "specializedSection": {{
-    "titleEn": "Domain-Specific Technical Guidance",
-    "titleNe": "विषयगत प्राविधिक निर्देशिका",
-    "contentEn": "Detailed specialized advice tailored to this exact video...",
-    "contentNe": "यस भिडियोको विषय अनुसारको विशेष व्यावहारिक सल्लाह (नेपालीमा)..."
-  }},
-  "precautionsEn": ["Precaution 1...", "Precaution 2..."],
-  "precautionsNe": ["सावधानी १...", "सावधानी २..."]
+  "blocks": [
+    {{
+      "type": "hero_summary",
+      "data": {{
+        "title": "Video title summary",
+        "description": "2-3 sentence video summary for Nepali farmers",
+        "badge": "CROP_TUTORIAL or LIVESTOCK or EQUIPMENT etc",
+        "difficultyLevel": "Beginner/Intermediate/Advanced"
+      }}
+    }},
+    ... more blocks with their data filled ...
+  ]
 }}
-Return raw JSON ONLY. No markdown wrappers.
-"""
+
+Fill each block's data fields with REAL content from the video transcript. Use practical Nepali farming units (ropani, muri, kg).
+Return raw JSON ONLY. No markdown wrappers."""
+
 
         try:
             print("[STEP 3] Sending to Groq Llama 8B Instant...")
