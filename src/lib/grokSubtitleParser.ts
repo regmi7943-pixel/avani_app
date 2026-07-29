@@ -517,9 +517,11 @@ export async function inspectLiveAIPipeline(
 
         await new Promise(resolve => setTimeout(resolve, 400));
 
+        const rawAudioEndpoint = `${renderServerUrl}/download-audio-file?url=${encodeURIComponent(youtubeUrl)}`;
+
         const finalStep: AIPipelineInspectorStep = {
           step: 'completed',
-          audioUrl: youtubeUrl,
+          audioUrl: rawAudioEndpoint,
           transcript: data.transcript || "Transcribed real-time spoken audio stream successfully using Groq Whisper.",
           analysis: data.analysis,
           elapsedMs: Date.now() - startTime

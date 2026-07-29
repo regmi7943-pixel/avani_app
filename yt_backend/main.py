@@ -4,6 +4,7 @@ import requests
 import json
 import re
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 import yt_dlp
 
 app = FastAPI(title="Avani YouTube Audio & AI Analysis Microservice")
@@ -14,6 +15,42 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 def ping():
     """Health check endpoint for UptimeRobot keep-alive pings."""
     return {"status": "alive", "service": "Avani YouTube AI Service"}
+
+@app.get("/download-audio-file")
+def download_audio_file(url: str):
+    """Downloads audio via yt-dlp and serves the raw MP3 binary file directly."""
+    temp_dir = tempfile.mkdtemp()
+    audio_path = os.path.join(temp_dir, "audio.mp3")
+
+    ydl_opts = {
+        'format': 'ba[ext=m4a]/ba/b',
+        'outtmpl': os.path.join(temp_dir, 'audio'),
+        'download_ranges': yt_dlp.utils.download_range_func(None, [(0, 120)]),
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '64',
+        }],
+        'quiet': True,
+    }
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
+
+        target_file = audio_path if os.path.exists(audio_path) else None
+        if not target_file:
+            for f in os.listdir(temp_dir):
+                if f.endswith('.mp3') or f.endswith('.m4a'):
+                    target_file = os.path.join(temp_dir, f)
+                    break
+
+        if target_file and os.path.exists(target_file):
+            return FileResponse(target_file, media_type="audio/mpeg", filename="extracted_yt_audio.mp3")
+        else:
+            raise HTTPException(status_code=500, detail="Audio file extraction failed")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"yt-dlp audio download error: {str(e)}")
 
 @app.get("/extract-audio")
 def extract_audio(url: str):

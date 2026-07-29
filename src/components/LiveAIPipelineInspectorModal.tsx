@@ -209,9 +209,9 @@ export const LiveAIPipelineInspectorModal: React.FC<LiveAIPipelineInspectorModal
                     <View style={styles.webviewAudioContainer}>
                       <WebView
                         source={{
-                          html: `<html><body style="margin:0;padding:0;background:#000;"><iframe width="100%" height="80" src="https://www.youtube.com/embed/${extractId(activeUrl)}?autoplay=1&playsinline=1" frameborder="0" allow="autoplay"></iframe></body></html>`,
+                          html: `<!DOCTYPE html><html><body style="margin:0;padding:8px;background:#0F172A;display:flex;align-items:center;justify-content:center;"><audio controls autoplay style="width:100%;height:45px;"><source src="${currentStep.audioUrl || `https://avani-yt-backend.onrender.com/download-audio-file?url=${encodeURIComponent(activeUrl)}`}" type="audio/mpeg">Your browser does not support audio element.</audio></body></html>`,
                         }}
-                        style={{ height: 80, width: '100%', borderRadius: 8 }}
+                        style={{ height: 60, width: '100%', borderRadius: 8 }}
                       />
                     </View>
                   )}
