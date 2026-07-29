@@ -231,18 +231,34 @@ def youtube_full_analysis(url: str):
                 print(f"[STEP 2 FALLBACK FAIL] TimedText error: {sub_err}")
 
         # ──────────────────────────────────────────
-        # STEP 3: Groq Llama 8B Instant
+        # STEP 3: Groq Llama 8B Instant (Adaptive Content Reasoning)
         # ──────────────────────────────────────────
         prompt = f"""You are Avani AI's Master Agronomist.
 Analyze this YouTube video title and transcript:
 Title: "{title}"
 Transcript: "{transcript[:3000]}"
 
-Generate a structured agronomic summary and step-by-step method in JSON format:
+First, analyze the video's core topic and determine the most appropriate content type variant:
+- CROP_TUTORIAL: Standard planting/harvesting farming guide.
+- DISEASE_PEST_CURE: Identification, symptoms, chemical/organic cures, and spray dosages.
+- EQUIPMENT_REVIEW: Farm tools, mini-tillers, specs, pros/cons, maintenance.
+- MARKET_PRICES_STORAGE: Harvesting, post-harvest storage, market selling strategies.
+- COMPOST_ORGANIC_RECIPE: Jivamrita, vermicompost ingredients, preparation & application.
+- GOVT_SUBSIDY: Government krishi anudan, loan process, required documents.
+- SOIL_TESTING: Soil pH, lime treatment, organic matter improvement.
+- LIVESTOCK_POULTRY: Animal care, feed nutrition, disease prevention.
+- SEED_GERMINATION: Seed treatment, germination test, nursery care.
+- SEASONAL_CALENDAR: Planting calendar, monsoon planning, weather precautions.
+
+Return a JSON object matching this structure:
 {{
   "title": "{title}",
-  "summaryEn": "Detailed 2-sentence summary of what this video teaches in English.",
-  "summaryNe": "यस भिडियोले सिकाउने विस्तृत २-वाक्यको सारांश (नेपालीमा)।",
+  "variantType": "CROP_TUTORIAL",
+  "reasoning": "1-sentence explanation of why this video fits this specific variant.",
+  "summaryEn": "Detailed 2-sentence summary in English.",
+  "summaryNe": "विस्तृत २-वाक्यको सारांश (नेपालीमा)।",
+  "keyTakeawaysEn": ["Takeaway 1...", "Takeaway 2..."],
+  "keyTakeawaysNe": ["मुख्य कुरा १...", "मुख्य कुरा २..."],
   "stepsEn": [
     "Step 1: Land prep / seed selection method...",
     "Step 2: Planting / spacing method...",
@@ -257,12 +273,18 @@ Generate a structured agronomic summary and step-by-step method in JSON format:
   ],
   "dosageTable": {{
     "unit": "Per Ropani / Per Plant",
-    "basalEn": "Basal fertilizer dosage taught...",
-    "basalNe": "आधार मल परिमाण (नेपालीमा)...",
-    "topDressEn": "Top-dressing schedule...",
-    "topDressNe": "थप मल परिमाण (नेपालीमा)...",
-    "sprayEn": "Pesticide/fungicide spray recommended...",
-    "sprayNe": "विषादी स्प्रे परिमाण (नेपालीमा)..."
+    "basalEn": "Basal fertilizer or primary dosage...",
+    "basalNe": "आधार मल / मुख्य परिमाण (नेपालीमा)...",
+    "topDressEn": "Top-dressing or secondary treatment...",
+    "topDressNe": "थप मल / दोस्रो उपचार (नेपालीमा)...",
+    "sprayEn": "Spray chemical/fungicide or maintenance rate...",
+    "sprayNe": "विषादी / स्प्रे परिमाण (नेपालीमा)..."
+  }},
+  "specializedSection": {{
+    "titleEn": "Specialized Field Guidance",
+    "titleNe": "विशेष क्षेत्र निर्देशिका",
+    "contentEn": "Tailored actionable advice based on video intent...",
+    "contentNe": "भिडियो अनुसारको व्यावहारिक सल्लाह (नेपालीमा)..."
   }},
   "precautionsEn": ["Precaution 1...", "Precaution 2..."],
   "precautionsNe": ["सावधानी १...", "सावधानी २..."]

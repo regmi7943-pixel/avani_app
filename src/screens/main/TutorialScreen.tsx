@@ -1309,31 +1309,7 @@ export default function TutorialScreen() {
                 </>
               )}
 
-              {/* Ask Avani AI Shortcut */}
-              <View style={{ paddingHorizontal: 18, marginTop: 20 }}>
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  onPress={() => {
-                    const mTitle = activeGuideModal ? (language === 'ne' ? activeGuideModal.titleNe : activeGuideModal.titleEn) : '';
-                    setActiveGuideModal(null);
-                    setIsPlayingVideo(false);
-                    navigation.navigate('Main', { 
-                      screen: 'AI Assistant', 
-                      params: { 
-                        initialPrompt: language === 'ne' 
-                          ? ('मलाई "' + mTitle + '" सम्बन्धी मेरो खेतको सिँचाइ र विषादी सोध्नु छ।')
-                          : ('I need personalized advice on irrigation and pesticide for "' + mTitle + '".')
-                      } 
-                    });
-                  }}
-                  style={[styles.aiShortcutBtn, { backgroundColor: colors.brandGreen }]}
-                >
-                  <Ionicons name="sparkles" size={18} color="#fff" />
-                  <Text style={{ color: '#fff', fontSize: 13.5, fontWeight: '800' }}>
-                    {language === 'ne' ? 'यस बालीको सिँचाइ/विषादीबारे अवनि AI सँग सोध्नुहोस्' : 'Ask Avani AI About My Field Irrigation & Pesticides'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
+
 
             </ScrollView>
           </View>

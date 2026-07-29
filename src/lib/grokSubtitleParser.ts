@@ -6,11 +6,15 @@ import { YouTubeFarmingItem, GOOGLE_YOUTUBE_API_KEY } from './youtubeService';
 const GROQ_API_KEY = process.env.EXPO_PUBLIC_GROQ_API_KEY || '';
 
 export interface GrokParsedVideoDetails {
+  variantType?: 'CROP_TUTORIAL' | 'DISEASE_PEST_CURE' | 'EQUIPMENT_REVIEW' | 'MARKET_PRICES_STORAGE' | 'COMPOST_ORGANIC_RECIPE' | 'GOVT_SUBSIDY' | 'SOIL_TESTING' | 'LIVESTOCK_POULTRY' | 'SEED_GERMINATION' | 'SEASONAL_CALENDAR';
+  reasoning?: string;
   summaryEn: string;
   summaryNe: string;
+  keyTakeawaysEn?: string[];
+  keyTakeawaysNe?: string[];
   stepsEn: string[];
   stepsNe: string[];
-  dosageTable: {
+  dosageTable?: {
     unit: string;
     basalEn: string;
     basalNe: string;
@@ -18,6 +22,12 @@ export interface GrokParsedVideoDetails {
     topDressNe: string;
     sprayEn: string;
     sprayNe: string;
+  };
+  specializedSection?: {
+    titleEn: string;
+    titleNe: string;
+    contentEn: string;
+    contentNe: string;
   };
   precautionsEn: string[];
   precautionsNe: string[];

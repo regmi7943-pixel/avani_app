@@ -325,85 +325,6 @@ function getAgronomicDosageTable(crop: 'rice' | 'maize' | 'wheat' | 'potato' | '
         topDressNe: 'यूरिया ५ किग्रा (पहिलो सिँचाइ) + यूरिया ४ किग्रा (टुप्पा आउँदा)',
         sprayEn: 'Tilt Propiconazole 25% EC @ 1ml/L',
         sprayNe: 'पहेंलो रतुवा नियन्त्रणका लागि टिल्ट प्रोपिकोनाजोल',
-      };
-    case 'potato':
-      return {
-        unit: 'Per Ropani (500 sq. m)',
-        basalEn: 'DAP 14 kg + Potash 8 kg + Organic Compost 1000 kg',
-        basalNe: 'DAP १४ किग्रा + पोटाश ८ किग्रा + जैविक कम्पोस्ट १००० किग्रा',
-        topDressEn: 'Urea 7 kg during earthing-up (30-35 days)',
-        topDressNe: 'उप्काउने समयमा यूरिया ७ किग्रा (३०-३५ दिनमा)',
-        sprayEn: 'Mancozeb 75% WP @ 2g/L',
-        sprayNe: 'ददुवा रोग रोकथामका लागि म्यानकोजेब',
-      };
-    case 'mustard':
-      return {
-        unit: 'Per Ropani (500 sq. m)',
-        basalEn: 'DAP 6 kg + Potash 2.5 kg + Sulfur 1.5 kg',
-        basalNe: 'DAP ६ किग्रा + पोटाश २.५ किग्रा + सल्फर १.५ किग्रा',
-        topDressEn: 'Urea 4 kg after first weeding (20-25 days)',
-        topDressNe: 'गोडमेल पछि यूरिया ४ किग्रा (२०-२५ दिनमा)',
-        sprayEn: 'Imidacloprid 17.8% SL @ 0.5ml/L',
-        sprayNe: 'लाही कीरा नियन्त्रणका लागि इमिडाक्लोप्रिड',
-      };
-    case 'rice':
-    default:
-      return {
-        unit: 'Per Ropani (500 sq. m)',
-        basalEn: 'DAP 9 kg + Potash 3.5 kg + Zinc 1 kg',
-        basalNe: 'DAP ९ किग्रा + पोटाश ३.५ किग्रा + जिङ्क १ किग्रा',
-        topDressEn: 'Urea 4.5 kg (Tillering) + Urea 4.5 kg (Panicle)',
-        topDressNe: 'यूरिया ४.५ किग्रा (गाँज आउँदा) + यूरिया ४.५ किग्रा (बाली ग्याब हुँदा)',
-        sprayEn: 'Cartap Hydrochloride 50% SP @ 1.5g/L',
-        sprayNe: 'गाँभो कीरा नियन्त्रणका लागि कार्टाप हाइड्रोक्लोराइड',
-      };
-  }
-}
-
-function getAgronomicSteps(crop: 'rice' | 'maize' | 'wheat' | 'potato' | 'mustard') {
-  switch (crop) {
-    case 'maize':
-      return {
-        stepsEn: [
-          'Land Prep: Deep plow and mix FYM compost 500kg per ropani.',
-          'Sowing: Plant Rampur Hybrid-10 at 60cm row & 25cm plant spacing.',
-          'Irrigation: Provide first critical irrigation at knee-high stage.',
-          'Pest Care: Inspect whorls for Fall Armyworm and apply Emamectin Benzoate.'
-        ],
-        stepsNe: [
-          'जमिन तयारी: गहिरो जोताइ गरी ५०० किग्रा कम्पोस्ट मल मिसाउनुहोस्।',
-          'बीउ रोप्ने: लहर ६० सेमी र बोट २५ सेमी दुरीमा मकै रोप्नुहोस्।',
-          'सिँचाइ: घुँडा सम्म आउने उमेरमा पहिलो अनिवार्य सिँचाइ दिनुहोस्।',
-          'कीरा नियन्त्रण: मकैको पोथीमा फौजी कीरा भए इमामेक्टिन विषादी प्रयोग गर्नुहोस्।'
-        ]
-      };
-    case 'wheat':
-      return {
-        stepsEn: [
-          'Soil Preparation: Level field thoroughly and broadcast basal DAP.',
-          'Sowing: Seed NL-971 at 10kg per ropani in rows 20cm apart.',
-          'Crown Root Irrigation: Irrigate precisely 21 days after sowing (CRI stage).',
-          'Disease Prevention: Spray Tilt Propiconazole if yellow rust spots appear.'
-        ],
-        stepsNe: [
-          'माटो तयारी: खेत सम्म बनाएर आधार मल डि.ए.पी. मिसाउनुहोस्।',
-          'रोप्ने: एन.एल. ९७१ गहुँ बीउ १० किग्रा प्रति रोपनी लहरमा रोप्नुहोस्।',
-          'CRI सिँचाइ: छरेको २१ औं दिनमा पहिलो crown root सिँचाइ दिनुहोस्।',
-          'रतुवा रोकथाम: पहेंलो रतुवा देखिएमा टिल्ट प्रोपिकोनाजोल छर्कनुहोस्।'
-        ]
-      };
-    case 'potato':
-      return {
-        stepsEn: [
-          'Seed Tuber Prep: Select disease-free sprouted tubers (30-40g).',
-          'Planting: Plant tubers in ridges 60cm apart with 25cm in-row distance.',
-          'Earthing-up & Top-dressing: Apply Urea and heap soil at 30 days.',
-          'Late Blight Care: Spray Mancozeb preemptively before rain.'
-        ],
-        stepsNe: [
-          'बीउ आलु तयारी: ३०-४० ग्रामका निरोगा टुसा आएका बीउ छान्नुहोस्।',
-          'रोप्ने: ६० सेमी दुरीको ड्याङमा २५ सेमी दुरीमा आलु पुर्नुहोस्।',
-          'माटो उप्काउने: ३० दिनमा यूरिया मल हालेर ड्याङ अग्लो बनाउनुहोस्।',
           'ददुवा रोकथाम: पानी पर्नु अघि म्यानकोजेब विषादी स्प्रे गर्नुहोस्।'
         ]
       };
@@ -441,9 +362,34 @@ function getAgronomicSteps(crop: 'rice' | 'maize' | 'wheat' | 'potato' | 'mustar
   }
 }
 
-/**
- * YouTube Search API (Fetches 50 Live Videos)
- */
+export function parseIsoDuration(isoDuration?: string): string {
+  if (!isoDuration) return '05:30 MIN';
+  const match = isoDuration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  if (!match) return '05:30 MIN';
+
+  const hours = parseInt(match[1] || '0', 10);
+  const minutes = parseInt(match[2] || '0', 10);
+  const seconds = parseInt(match[3] || '0', 10);
+
+  const sStr = seconds.toString().padStart(2, '0');
+  if (hours > 0) {
+    const totalMinutes = hours * 60 + minutes;
+    return `${totalMinutes}:${sStr} MIN`;
+  }
+
+  const mStr = minutes.toString().padStart(2, '0');
+  return `${mStr}:${sStr} MIN`;
+}
+
+function formatViewCount(countStr?: string): string {
+  if (!countStr) return '3.2k views';
+  const num = parseInt(countStr, 10);
+  if (isNaN(num)) return '3.2k views';
+  if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M views`;
+  if (num >= 1000) return `${(num / 1000).toFixed(1)}k views`;
+  return `${num} views`;
+}
+
 export async function fetchGoogleYouTubeVideos(
   cropFilter: string = 'all',
   searchQuery: string = '',
@@ -474,11 +420,7 @@ export async function fetchGoogleYouTubeVideos(
       url += `&pageToken=${pageToken}`;
     }
 
-    console.log(`[YouTube API Diagnostic] Requesting URL: ${url}`);
-
     const res = await fetch(url);
-    console.log(`[YouTube API Diagnostic] Response Status Code: ${res.status} ${res.statusText}`);
-
     if (res.status === 403) {
       console.warn('[YouTube API 403 Forbidden] YouTube API key quota exceeded or unenabled in Google Cloud Console. Falling back to verified Nepal video inventory.');
     }
@@ -488,16 +430,15 @@ export async function fetchGoogleYouTubeVideos(
       if (data.nextPageToken) {
         returnedNextPageToken = data.nextPageToken;
       }
-      const items = data.items || [];
-      console.log(`[YouTube API Diagnostic] Google API returned ${items.length} items.`);
+      const rawItems = data.items || [];
+      const validVids: string[] = [];
+      const itemMap = new Map<string, any>();
 
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        const vid = item.id?.videoId;
+      for (const rawItem of rawItems) {
+        const vid = rawItem.id?.videoId;
         if (!vid || seenVids.has(vid)) continue;
-        seenVids.add(vid);
 
-        const snippet = item.snippet || {};
+        const snippet = rawItem.snippet || {};
         const title = snippet.title || 'Nepal Farming Tutorial Guide';
         const desc = snippet.description || '';
         const lowerTitle = title.toLowerCase();
@@ -505,6 +446,39 @@ export async function fetchGoogleYouTubeVideos(
         if (EXCLUDE_TERMS.some(term => lowerTitle.includes(term) || desc.toLowerCase().includes(term))) {
           continue;
         }
+
+        seenVids.add(vid);
+        validVids.push(vid);
+        itemMap.set(vid, rawItem);
+      }
+
+      // Query contentDetails & statistics for exact real duration
+      const detailsMap = new Map<string, { duration: string; views: string }>();
+      if (validVids.length > 0) {
+        try {
+          const detailUrl = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails,statistics&id=${validVids.join(',')}&key=${GOOGLE_YOUTUBE_API_KEY}`;
+          const detailRes = await fetch(detailUrl);
+          if (detailRes.ok) {
+            const detailData = await detailRes.json();
+            for (const dItem of detailData.items || []) {
+              const isoDur = dItem.contentDetails?.duration;
+              const viewCnt = dItem.statistics?.viewCount;
+              detailsMap.set(dItem.id, {
+                duration: parseIsoDuration(isoDur),
+                views: formatViewCount(viewCnt)
+              });
+            }
+          }
+        } catch (detailErr) {
+          console.warn("[YouTube API] Video details fetch notice:", detailErr);
+        }
+      }
+
+      for (const vid of validVids) {
+        const item = itemMap.get(vid);
+        const snippet = item.snippet || {};
+        const title = snippet.title || 'Nepal Farming Tutorial Guide';
+        const desc = snippet.description || '';
 
         const cropType = classifyCropType(title, desc, cropFilter);
         const { topic, topicLabelEn, topicLabelNe } = classifyTopic(title);
@@ -514,6 +488,7 @@ export async function fetchGoogleYouTubeVideos(
         
         const dosageTable = getAgronomicDosageTable(cropType);
         const { stepsEn, stepsNe } = getAgronomicSteps(cropType);
+        const details = detailsMap.get(vid) || { duration: '06:45 MIN', views: '4.2k views' };
 
         results.push({
           id: vid,
@@ -528,7 +503,7 @@ export async function fetchGoogleYouTubeVideos(
           topic,
           topicLabelEn,
           topicLabelNe,
-          duration: '04:30 MIN',
+          duration: details.duration,
           authorEn: author,
           authorNe: author,
           thumbnailUrl: thumbnail,
@@ -539,7 +514,7 @@ export async function fetchGoogleYouTubeVideos(
           timingBadgeNe: '🎬 गुगल युट्युब API द्वारा प्रमाणित भिडियो',
           dosageSummaryEn: `${dosageTable.basalEn} • ${dosageTable.topDressEn}`,
           dosageSummaryNe: `${dosageTable.basalNe} • ${dosageTable.topDressNe}`,
-          views: '2.5k views',
+          views: details.views,
           rating: '4.9',
           image: { uri: thumbnail },
           dosageTable,
