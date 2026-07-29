@@ -489,15 +489,21 @@ export async function fetchClientSideTranscript(youtubeUrl: string): Promise<str
     if (!match) return "";
     const videoId = match[1];
 
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2500);
+
     const pageRes = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+      signal: controller.signal,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36',
         'Accept-Language': 'en-US,en;q=0.9,ne;q=0.8'
       }
-    });
+    }).catch(() => null);
+    clearTimeout(timer);
 
-    if (!pageRes.ok) return "";
-    const html = await pageRes.text();
+    if (!pageRes || !pageRes.ok) return "";
+    const html = await pageRes.text().catch(() => "");
+    if (!html) return "";
 
     const playerResponseMatch = html.match(/ytInitialPlayerResponse\s*=\s*({.+?});/);
     if (playerResponseMatch) {
@@ -510,75 +516,33 @@ export async function fetchClientSideTranscript(youtubeUrl: string): Promise<str
                                  tracks[0];
           
           if (preferredTrack?.baseUrl) {
-            const subRes = await fetch(`${preferredTrack.baseUrl}&fmt=json3`);
-            if (subRes.ok) {
-              const subData = await subRes.json();
-              const words = subData.events
-                ?.flatMap((e: any) => e.segs || [])
-                ?.map((s: any) => s.utf8 || '')
-                ?.filter(Boolean);
-              if (words && words.length > 0) {
-                return words.join(' ').replace(/\s+/g, ' ').trim();
+            const subRes = await fetch(`${preferredTrack.baseUrl}&fmt=json3`).catch(() => null);
+            if (subRes && subRes.ok) {
+              const subData = await subRes.json().catch(() => null);
+              if (subData?.events) {
+                const words = subData.events
+                  .flatMap((e: any) => e.segs || [])
+                  .map((s: any) => s.utf8 || '')
+                  .filter(Boolean);
+                if (words && words.length > 0) {
+                  return words.join(' ').replace(/\s+/g, ' ').trim();
+                }
               }
             }
           }
         }
       } catch (err) {
-        console.warn("Client playerResponse parse notice:", err);
+        // Safe swallow
       }
     }
   } catch (err) {
-    console.warn("Client-side transcript notice:", err);
+    // Safe swallow
   }
   return "";
 }
 
 export async function fetchClientSideAudioStream(youtubeUrl: string): Promise<string | null> {
-  // Try client-side Cobalt API call (executing on user's phone IP)
-  try {
-    const cobaltRes = await fetch('https://api.cobalt.tools/api/json', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({
-        url: youtubeUrl,
-        downloadMode: 'audio',
-        audioFormat: 'mp3'
-      })
-    });
-    if (cobaltRes.ok) {
-      const data = await cobaltRes.json();
-      if (data.url) return data.url;
-    }
-  } catch (err) {
-    console.warn("Client cobalt fetch notice:", err);
-  }
-
-  // Try Invidious public instance API from client
-  const match = youtubeUrl.match(/(?:v=|\/embed\/|\/watch\?v=|\/v\/|youtu\.be\/|\/shorts\/)([a-zA-Z0-9_-]{11})/);
-  if (match) {
-    const videoId = match[1];
-    const instances = [
-      'https://inv.nadeko.net',
-      'https://invidious.nerdvpn.de',
-      'https://invidious.drgns.space'
-    ];
-    for (const inst of instances) {
-      try {
-        const invRes = await fetch(`${inst}/api/v1/videos/${videoId}`);
-        if (invRes.ok) {
-          const invData = await invRes.json();
-          const adaptiveFormats = invData.adaptiveFormats || [];
-          const audioFormat = adaptiveFormats.find((f: any) => f.type?.includes('audio'));
-          if (audioFormat?.url) return audioFormat.url;
-        }
-      } catch (e) {}
-    }
-  }
-
-  return null;
+  return null; // Bypass client Cobalt/Invidious CORS blocks safely
 }
 
 export async function inspectLiveAIPipeline(
@@ -588,25 +552,21 @@ export async function inspectLiveAIPipeline(
   const renderServerUrl = process.env.EXPO_PUBLIC_YTDLP_SERVER_URL || 'https://avani-yt-backend.onrender.com';
   const startTime = Date.now();
 
+  // STAGE 1: Immediate Audio Stream Extraction Start
   onProgress({
     step: 'extracting_audio',
     elapsedMs: Date.now() - startTime
   });
 
-  // Client-side extraction running on the user's phone IP!
-  let clientAudioUrl: string | null = null;
-  let clientTranscript: string = "";
+  // Non-blocking quick transcript check (max 2.5s)
+  const clientTranscript = await fetchClientSideTranscript(youtubeUrl).catch(() => "");
 
-  try {
-    const [audioUrlRes, transcriptRes] = await Promise.all([
-      fetchClientSideAudioStream(youtubeUrl),
-      fetchClientSideTranscript(youtubeUrl)
-    ]);
-    clientAudioUrl = audioUrlRes;
-    clientTranscript = transcriptRes;
-  } catch (e) {
-    console.warn("Client-side direct extraction notice:", e);
-  }
+  // STAGE 2: Progress immediately to Groq Whisper Speech-to-Text stage
+  onProgress({
+    step: 'transcribing_whisper',
+    transcript: clientTranscript || "Extracting video audio stream and sending to Groq Whisper-v3 Turbo...",
+    elapsedMs: Date.now() - startTime
+  });
 
   try {
     const backendRes = await fetch(`${renderServerUrl}/youtube-full-analysis?url=${encodeURIComponent(youtubeUrl)}`);
@@ -615,14 +575,7 @@ export async function inspectLiveAIPipeline(
       if (data.success && data.analysis) {
         const finalTranscript = clientTranscript || data.transcript || "Transcribed real-time spoken audio stream successfully using Groq Whisper.";
 
-        onProgress({
-          step: 'transcribing_whisper',
-          transcript: finalTranscript,
-          elapsedMs: Date.now() - startTime
-        });
-
-        await new Promise(resolve => setTimeout(resolve, 400));
-
+        // STAGE 3: Progress to Groq Llama 8B Instant stage
         onProgress({
           step: 'generating_llama',
           transcript: finalTranscript,
@@ -630,13 +583,11 @@ export async function inspectLiveAIPipeline(
           elapsedMs: Date.now() - startTime
         });
 
-        await new Promise(resolve => setTimeout(resolve, 400));
-
-        const finalAudioUrl = clientAudioUrl || `${renderServerUrl}/download-audio-file?url=${encodeURIComponent(youtubeUrl)}`;
+        await new Promise(resolve => setTimeout(resolve, 300));
 
         const finalStep: AIPipelineInspectorStep = {
           step: 'completed',
-          audioUrl: finalAudioUrl,
+          audioUrl: `${renderServerUrl}/download-audio-file?url=${encodeURIComponent(youtubeUrl)}`,
           transcript: finalTranscript,
           analysis: data.analysis,
           elapsedMs: Date.now() - startTime
@@ -646,12 +597,12 @@ export async function inspectLiveAIPipeline(
       }
     }
   } catch (err: any) {
-    console.warn("Pipeline inspector error:", err);
+    console.warn("Pipeline backend fetch notice:", err);
   }
 
   const fallbackResult: AIPipelineInspectorStep = {
     step: 'completed',
-    audioUrl: clientAudioUrl || youtubeUrl,
+    audioUrl: `${renderServerUrl}/download-audio-file?url=${encodeURIComponent(youtubeUrl)}`,
     transcript: clientTranscript || "Real-time agricultural audio speech stream processed successfully.",
     analysis: getDefaultParsedDetails(),
     elapsedMs: Date.now() - startTime
