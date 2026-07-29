@@ -152,15 +152,18 @@ def youtube_full_analysis(url: str):
         transcript = ""
 
         # ──────────────────────────────────────────
-        # STEP 1a: Extract video metadata (title) — always works
+        # STEP 1a: Extract video title via YouTube oEmbed API (always works, no auth needed)
         # ──────────────────────────────────────────
         try:
-            with yt_dlp.YoutubeDL({'quiet': True, 'no_warnings': True, 'skip_download': True}) as ydl:
-                info = ydl.extract_info(url, download=False)
-                title = info.get('title', 'YouTube Video')
-                print(f"[STEP 1a OK] Got title: {title}")
+            oembed_res = requests.get(
+                f"https://www.youtube.com/oembed?url={url}&format=json",
+                timeout=10,
+            )
+            if oembed_res.ok:
+                title = oembed_res.json().get("title", "YouTube Video")
+                print(f"[STEP 1a OK] Got title via oEmbed: {title}")
         except Exception as e:
-            print(f"[STEP 1a] Metadata extraction note: {e}")
+            print(f"[STEP 1a] oEmbed title extraction note: {e}")
 
         # ──────────────────────────────────────────
         # STEP 1b: Try to download audio (may fail on datacenter IPs)
