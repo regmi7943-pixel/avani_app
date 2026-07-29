@@ -8,10 +8,18 @@ import {
   ScrollView,
   TextInput,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { inspectLiveAIPipeline, AIPipelineInspectorStep } from '../lib/grokSubtitleParser';
+
+let WebView: any = View;
+if (Platform.OS !== 'web') {
+  try {
+    WebView = require('react-native-webview').WebView;
+  } catch (e) {}
+}
 
 interface LiveAIPipelineInspectorModalProps {
   visible: boolean;
@@ -136,6 +144,30 @@ export const LiveAIPipelineInspectorModal: React.FC<LiveAIPipelineInspectorModal
               ) : null}
             </View>
 
+            {/* Real YouTube Video Player Preview */}
+            <Text style={styles.sectionLabel}>2. REAL VIDEO PREVIEW & LIVE AUDIO</Text>
+            <View style={styles.videoPlayerBox}>
+              {Platform.OS === 'web' ? (
+                <iframe
+                  width="100%"
+                  height="210"
+                  src={`https://www.youtube.com/embed/${extractId(activeUrl)}?autoplay=0&playsinline=1&rel=0`}
+                  style={{ border: 'none', borderRadius: 12 }}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              ) : (
+                <WebView
+                  source={{
+                    html: `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"></head><body style="margin:0;padding:0;background:#0F172A;display:flex;justify-content:center;align-items:center;"><iframe width="100%" height="200" src="https://www.youtube.com/embed/${extractId(activeUrl)}?autoplay=0&playsinline=1&rel=0" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="border-radius:12px;"></iframe></body></html>`,
+                  }}
+                  style={{ height: 210, width: '100%', borderRadius: 12 }}
+                  allowsInlineMediaPlayback
+                  mediaPlaybackRequiresUserAction={false}
+                />
+              )}
+            </View>
+
             {/* Run Test Button */}
             <TouchableOpacity
               style={[styles.runBtn, isTesting && styles.runBtnDisabled]}
@@ -157,7 +189,7 @@ export const LiveAIPipelineInspectorModal: React.FC<LiveAIPipelineInspectorModal
             {/* Pipeline Stage Indicators */}
             {currentStep && (
               <View style={styles.pipelineContainer}>
-                <Text style={styles.sectionLabel}>2. REAL-TIME PIPELINE FLOW</Text>
+                <Text style={styles.sectionLabel}>3. REAL-TIME PIPELINE FLOW</Text>
 
                 {/* STAGE 1: AUDIO EXTRACTION */}
                 <View style={[styles.stageBox, currentStepName === 'extracting_audio' && styles.stageBoxActive]}>
@@ -504,5 +536,14 @@ const styles = StyleSheet.create({
   dosageText: {
     color: '#94A3B8',
     fontSize: 11,
+  },
+  videoPlayerBox: {
+    height: 215,
+    backgroundColor: '#0F172A',
+    borderRadius: 14,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#334155',
+    marginBottom: 16,
   },
 });
