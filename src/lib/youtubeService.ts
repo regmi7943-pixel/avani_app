@@ -516,7 +516,7 @@ export async function fetchGoogleYouTubeVideos(
   }
 
   try {
-    let url = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=50&q=${encodeURIComponent(qText)}&type=video&regionCode=NP&relevanceLanguage=ne&videoDuration=medium&videoDefinition=high&key=${GOOGLE_YOUTUBE_API_KEY}`;
+    let url = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=50&q=${encodeURIComponent(qText)}&type=video&regionCode=NP&relevanceLanguage=ne&videoDuration=medium&videoEmbeddable=true&key=${GOOGLE_YOUTUBE_API_KEY}`;
     if (pageToken) {
       url += `&pageToken=${pageToken}`;
     }
