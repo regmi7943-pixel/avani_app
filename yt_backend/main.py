@@ -231,62 +231,114 @@ def youtube_full_analysis(url: str):
                 print(f"[STEP 2 FALLBACK FAIL] TimedText error: {sub_err}")
 
         # ──────────────────────────────────────────
-        # STEP 3: Groq Llama 8B Instant — BLOCK ARCHITECT AI
+        # STEP 3: Groq Llama 70B Versatile — BLOCK ARCHITECT AI
         # ──────────────────────────────────────────
-        prompt = f"""You are the Avani AI Block Architect. Your job: analyze a YouTube farming video and pick the PERFECT UI blocks to display.
+        prompt = f"""You are the Avani AI Block Architect for Nepali agriculture. Analyze this video and build a PERFECT content layout.
 
 TITLE: "{title}"
-TRANSCRIPT (first 3000 chars): "{transcript[:3000]}"
+TRANSCRIPT: "{transcript[:3000]}"
 
-STEP 1 — REASON: Think about what this video teaches. What does a Nepali farmer NEED from this video? Is it a crop guide? Livestock? Business plan? Disease cure? Equipment?
+Your job: Pick 5-8 blocks and fill them with REAL content from the transcript.
 
-STEP 2 — PICK BLOCKS: Choose 5-8 blocks from this palette. ONLY pick blocks that are genuinely useful for THIS video. Never pad with irrelevant blocks.
+AVAILABLE BLOCKS WITH SCHEMAS:
 
-AVAILABLE BLOCKS (68 types):
-CONTENT: hero_summary, quote_highlight, fun_fact, video_context, narrator_note, key_takeaways, audio_snippet_transcript
-STEPS: step_list, numbered_process, quick_steps, decision_tree, flowchart_steps, troubleshooting_steps
-DATA: kv_table, comparison_table, dosage_chart, nutrient_table, cost_breakdown, roi_calculator, yield_estimate, measurement_specs, soil_test_report, feed_conversion_ratio
-LISTS: bullet_insights, checklist, pro_con_list, faq_list, do_dont_list, ingredient_list, tool_list, requirement_list, organic_cert_checklist
-TIMELINE: timeline, season_calendar, growth_stages, monthly_planner, harvest_schedule, gestation_timeline
-AGRICULTURE: breed_card, disease_card, pest_identification, soil_profile, irrigation_plan, seed_variety, fertilizer_schedule, spray_timing, weather_advisory, compost_recipe, aquaponics_setup, apiculture_hive_card, mushroom_flushing_card, weed_identification, pruning_guide
-BUSINESS: machine_specs, maintenance_checklist, market_price, subsidy_info, business_plan_summary, investment_table, loan_calculator
-ALERTS: warning_box, tip_box, success_box, info_box, metric_row, stat_highlight, badge_row, separator
+1. hero_summary (ALWAYS first):
+   {{"type":"hero_summary","data":{{"title":"...","description":"2-3 sentence summary","badge":"CROP/LIVESTOCK/EQUIPMENT/DISEASE/BUSINESS/COMPOST/SUBSIDY","difficultyLevel":"Beginner/Intermediate/Advanced"}}}}
+
+2. key_takeaways:
+   {{"type":"key_takeaways","data":{{"title":"Key Takeaways","takeaways":[{{"point":"...","elaboration":"..."}}]}}}}
+
+3. step_list:
+   {{"type":"step_list","data":{{"title":"...","steps":[{{"stepNumber":1,"title":"...","description":"...","duration":"optional","warning":"optional"}}]}}}}
+
+4. kv_table:
+   {{"type":"kv_table","data":{{"tableName":"...","rows":[{{"key":"...","value":"...","unit":"optional"}}]}}}}
+
+5. dosage_chart (ONLY for crop/pesticide videos):
+   {{"type":"dosage_chart","data":{{"productName":"...","activeIngredient":"...","dosageRules":[{{"target":"...","dosagePerUnit":"...","waterRatio":"optional","applicationMethod":"...","safetyIntervalDays":7}}]}}}}
+
+6. cost_breakdown:
+   {{"type":"cost_breakdown","data":{{"currency":"NPR","items":[{{"category":"...","item":"...","quantity":1,"unitCost":500,"totalCost":500}}],"totalExpenditure":5000}}}}
+
+7. breed_card (ONLY for livestock videos):
+   {{"type":"breed_card","data":{{"breedName":"...","origin":"...","traits":["..."],"avgWeight":"...","bestFor":"...","dailyMilkYieldOrEggCount":"optional"}}}}
+
+8. disease_card (ONLY for disease/pest videos):
+   {{"type":"disease_card","data":{{"diseaseName":"...","affectedCropsOrAnimals":["..."],"symptoms":["..."],"cause":"...","organicTreatment":["..."],"chemicalTreatment":["..."],"prevention":["..."]}}}}
+
+9. machine_specs (ONLY for equipment videos):
+   {{"type":"machine_specs","data":{{"machineName":"...","manufacturer":"optional","horsepower":12,"fuelConsumptionLitersPerHour":"1.5","compatibleImplements":["..."],"idealOperationSpeedKmh":"2-4"}}}}
+
+10. fertilizer_schedule:
+    {{"type":"fertilizer_schedule","data":{{"cropName":"...","applications":[{{"growthStage":"...","fertilizerType":"...","dosagePerAcre":"...","applicationMethod":"..."}}]}}}}
+
+11. compost_recipe (ONLY for organic/compost videos):
+    {{"type":"compost_recipe","data":{{"compostType":"Hot Compost/Vermicomposting/Bokashi/Pit Compost","targetCnRatio":"25:1","brownsList":["..."],"greensList":["..."],"moistureTargetPercent":"60%","turningFrequencyDays":7,"readyInWeeks":8}}}}
+
+12. subsidy_info (ONLY for government scheme videos):
+    {{"type":"subsidy_info","data":{{"schemeName":"...","offeringAuthority":"...","subsidyPercentage":50,"eligibilityCriteria":["..."],"requiredDocuments":["..."]}}}}
+
+13. business_plan_summary:
+    {{"type":"business_plan_summary","data":{{"farmBusinessTitle":"...","targetMarket":"...","revenueStreams":["..."],"estimatedCapEx":"...","estimatedOpExAnnual":"...","breakevenTimelineMonths":12,"keyRisks":["..."]}}}}
+
+14. pro_con_list:
+    {{"type":"pro_con_list","data":{{"topic":"...","pros":["..."],"cons":["..."]}}}}
+
+15. checklist:
+    {{"type":"checklist","data":{{"title":"...","items":[{{"id":"1","label":"...","isOptional":false}}]}}}}
+
+16. season_calendar:
+    {{"type":"season_calendar","data":{{"cropName":"...","seasons":[{{"seasonName":"Spring/Summer/Monsoon/Winter","activities":["..."],"keyMilestones":["..."]}}]}}}}
+
+17. growth_stages:
+    {{"type":"growth_stages","data":{{"subjectName":"...","stages":[{{"stageNumber":1,"stageName":"...","durationDays":14,"keyIndicators":["..."],"careInstructions":"..."}}]}}}}
+
+18. warning_box (safety alerts):
+    {{"type":"warning_box","data":{{"title":"...","message":"...","hazardLevel":"Caution/Danger/Toxic","safetyGearRequired":["Gloves","Mask"]}}}}
+
+19. tip_box (pro tips, ALWAYS use as last block):
+    {{"type":"tip_box","data":{{"title":"Pro Tip","tip":"..."}}}}
+
+20. metric_row (key stats):
+    {{"type":"metric_row","data":{{"metrics":[{{"label":"...","value":"...","unit":"optional"}}]}}}}
+
+21. bullet_insights:
+    {{"type":"bullet_insights","data":{{"heading":"...","bullets":["point 1","point 2"]}}}}
+
+22. do_dont_list:
+    {{"type":"do_dont_list","data":{{"topic":"...","dos":["..."],"donts":["..."]}}}}
+
+23. ingredient_list:
+    {{"type":"ingredient_list","data":{{"recipeName":"...","yieldVolumeOrWeight":"...","ingredients":[{{"name":"...","quantity":"...","purpose":"optional"}}]}}}}
+
+24. yield_estimate:
+    {{"type":"yield_estimate","data":{{"cropName":"...","landArea":"Per Ropani","minExpectedYield":"...","maxExpectedYield":"...","averageYield":"...","factorsInfluencingYield":["..."]}}}}
+
+25. comparison_table:
+    {{"type":"comparison_table","data":{{"title":"...","headers":["Option A","Option B"],"rows":[{{"feature":"...","values":["...","..."]}}]}}}}
 
 RULES:
-- ALWAYS start with hero_summary as the first block
-- For crop videos: use step_list, dosage_chart, fertilizer_schedule, season_calendar, yield_estimate, warning_box
-- For livestock: use breed_card, feed_conversion_ratio, gestation_timeline, cost_breakdown, checklist
-- For disease/pest: use disease_card OR pest_identification, spray_timing, dosage_chart, do_dont_list
-- For equipment: use machine_specs, pro_con_list, maintenance_checklist, cost_breakdown
-- For business: use business_plan_summary, investment_table, roi_calculator, timeline
-- For compost/organic: use compost_recipe OR ingredient_list, step_list, tip_box
-- For subsidy: use subsidy_info, checklist, requirement_list
-- NEVER use dosage_chart for livestock videos
-- NEVER use breed_card for crop videos
-- End with either tip_box or warning_box
+- ALWAYS start with hero_summary
+- ALWAYS end with tip_box or warning_box
+- Pick 5-8 blocks total
+- For CROP videos: hero_summary + step_list + fertilizer_schedule or dosage_chart + yield_estimate or season_calendar + tip_box
+- For LIVESTOCK: hero_summary + breed_card + cost_breakdown + checklist + tip_box
+- For DISEASE/PEST: hero_summary + disease_card + dosage_chart + do_dont_list + warning_box
+- For EQUIPMENT: hero_summary + machine_specs + pro_con_list + cost_breakdown + tip_box
+- For BUSINESS: hero_summary + business_plan_summary + cost_breakdown + metric_row + tip_box
+- For COMPOST/ORGANIC: hero_summary + compost_recipe or ingredient_list + step_list + tip_box
+- For SUBSIDY: hero_summary + subsidy_info + checklist + tip_box
+- NEVER use dosage_chart for livestock
+- NEVER use breed_card for crops
+- Fill ALL data fields with REAL content from the transcript. Use Nepali farming units (ropani, muri, kg).
 
-OUTPUT FORMAT — Return ONLY this JSON (no markdown, no explanation):
-{{
-  "blocks": [
-    {{
-      "type": "hero_summary",
-      "data": {{
-        "title": "Video title summary",
-        "description": "2-3 sentence video summary for Nepali farmers",
-        "badge": "CROP_TUTORIAL or LIVESTOCK or EQUIPMENT etc",
-        "difficultyLevel": "Beginner/Intermediate/Advanced"
-      }}
-    }},
-    ... more blocks with their data filled ...
-  ]
-}}
-
-Fill each block's data fields with REAL content from the video transcript. Use practical Nepali farming units (ropani, muri, kg).
-Return raw JSON ONLY. No markdown wrappers."""
+Return ONLY this JSON:
+{{"blocks":[...array of block objects...]}}
+No markdown. No explanation. Raw JSON only."""
 
 
         try:
-            print("[STEP 3] Sending to Groq Llama 8B Instant...")
+            print("[STEP 3] Sending to Groq Llama 70B Block Architect...")
             llm_res = requests.post(
                 "https://api.groq.com/openai/v1/chat/completions",
                 headers={
@@ -294,9 +346,10 @@ Return raw JSON ONLY. No markdown wrappers."""
                     "Content-Type": "application/json"
                 },
                 json={
-                    "model": "llama-3.1-8b-instant",
+                    "model": "llama-3.3-70b-versatile",
                     "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.1
+                    "temperature": 0.15,
+                    "max_tokens": 2500
                 },
                 timeout=30,
             )
