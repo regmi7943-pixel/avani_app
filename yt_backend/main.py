@@ -69,25 +69,20 @@ def extract_audio(url: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 def _get_ydl_opts(temp_dir: str, outtmpl_name: str = "audio") -> dict:
-    """Shared yt-dlp config with all bot-bypass tricks."""
+    """Shared yt-dlp config with android/ios player clients for datacenter IP bypass."""
     cookie_path = os.path.join(os.path.dirname(__file__), "cookies.txt")
     opts = {
-        'format': 'ba[ext=m4a]/ba/b',
-        'outtmpl': os.path.join(temp_dir, outtmpl_name),
+        'format': 'ba[ext=m4a]/ba/b/bestaudio',
+        'outtmpl': os.path.join(temp_dir, f"{outtmpl_name}.%(ext)s"),
         'download_ranges': yt_dlp.utils.download_range_func(None, [(0, 180)]),
-        # web_creator + mweb work with browser cookies (ios/android need OAuth tokens)
-        'extractor_args': {'youtube': {'player_client': ['web_creator', 'mweb', 'web']}},
+        'extractor_args': {'youtube': {'player_client': ['android', 'ios', 'mweb', 'web']}},
         'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36',
         },
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '64',
-        }],
         'quiet': True,
         'no_warnings': True,
         'socket_timeout': 30,
+        'nocheckcertificate': True,
     }
     if os.path.exists(cookie_path):
         opts['cookiefile'] = cookie_path
@@ -226,12 +221,14 @@ def youtube_full_analysis(url: str):
         if download_success and audio_path and os.path.exists(audio_path):
             try:
                 file_size = os.path.getsize(audio_path)
-                print(f"[STEP 2] Sending {file_size} bytes to Groq Whisper...")
+                file_ext = os.path.splitext(audio_path)[1].replace('.', '') or 'm4a'
+                mime_type = f"audio/{file_ext}" if file_ext != 'm4a' else 'audio/m4a'
+                print(f"[STEP 2] Sending {file_size} bytes ({file_ext}) to Groq Whisper...")
                 with open(audio_path, "rb") as audio_file:
                     whisper_res = requests.post(
                         "https://api.groq.com/openai/v1/audio/transcriptions",
                         headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
-                        files={"file": ("audio.mp3", audio_file, "audio/mp3")},
+                        files={"file": (f"audio.{file_ext}", audio_file, mime_type)},
                         data={"model": "whisper-large-v3-turbo", "response_format": "json"},
                         timeout=60,
                     )
