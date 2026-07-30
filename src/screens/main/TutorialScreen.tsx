@@ -587,11 +587,16 @@ export default function TutorialScreen() {
   // Trigger Grok AI Subtitle & Transcript Parser when activeGuideModal opens
   useEffect(() => {
     if (activeGuideModal) {
+      console.log(`[TutorialScreen] 📱 Opened Video Guide Modal for: "${activeGuideModal.titleEn || activeGuideModal.titleNe}" (ID: ${activeGuideModal.id})`);
       setIsParsingSubtitles(true);
       setParsedDetails(null);
       parseYouTubeVideoDetailsWithGrokAI(activeGuideModal as any)
         .then((result) => {
+          console.log(`[TutorialScreen] 🎯 Summary generation finished for ${activeGuideModal.id}. Received ${result?.dynamicBlocks?.length || 0} blocks.`);
           setParsedDetails(result);
+        })
+        .catch((err) => {
+          console.error(`[TutorialScreen] ❌ Summary generation error for ${activeGuideModal.id}:`, err);
         })
         .finally(() => {
           setIsParsingSubtitles(false);
@@ -1104,43 +1109,40 @@ export default function TutorialScreen() {
             <ScrollView contentContainerStyle={{ paddingBottom: 50 }} showsVerticalScrollIndicator={false}>
               
               {/* Real Video Player Component (Direct HTTPS URI with YouTube Referer - Bypasses Error 153/152-4) */}
-              {/* Real Video Player Component (Pre-mounted in background for 0ms instant play & zero black screen) */}
-              <View style={[styles.videoPlayerContainer, { height: 220, overflow: 'hidden', borderRadius: 18, backgroundColor: '#000', position: 'relative' }]}>
-                {/* Pre-mounted YouTube Web Player */}
-                <View style={[StyleSheet.absoluteFillObject, { width: '100%', height: 220 }]}>
-                  {Platform.OS === 'web' ? (
-                    <iframe
-                      width="100%"
-                      height="220"
-                      src={`https://www.youtube-nocookie.com/embed/${getVideoId(activeGuideModal.youtubeId, activeGuideModal.videoUrl)}?autoplay=${isPlayingVideo ? 1 : 0}&playsinline=1&controls=1&rel=0`}
-                      style={{ border: 'none', width: '100%', height: '100%' }}
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      referrerPolicy="strict-origin-when-cross-origin"
-                      allowFullScreen
-                    />
-                  ) : (
-                    <WebView
-                      originWhitelist={['*']}
-                      source={{
-                        html: `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><meta name="referrer" content="strict-origin-when-cross-origin"><style>*{margin:0;padding:0;box-sizing:border-box;background:#000;}html,body{width:100%;height:100%;overflow:hidden;background:#000;}iframe{width:100%;height:100%;border:none;}</style></head><body><iframe src="https://www.youtube-nocookie.com/embed/${getVideoId(activeGuideModal.youtubeId, activeGuideModal.videoUrl)}?autoplay=${isPlayingVideo ? 1 : 0}&playsinline=1&controls=1&rel=0&enablejsapi=1&origin=https://localhost&widget_referrer=https://localhost" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></body></html>`,
-                        baseUrl: 'https://localhost',
-                      }}
-                      style={{ width: '100%', height: 220 }}
-                      allowsInlineMediaPlayback={true}
-                      mediaPlaybackRequiresUserAction={false}
-                      allowsFullscreenVideo={true}
-                      javaScriptEnabled={true}
-                      domStorageEnabled={true}
-                      mixedContentMode="always"
-                    />
-                  )}
-                </View>
-
-                {/* Instant Thumbnail Cover Overlay (hides immediately when Play is pressed) */}
-                {!isPlayingVideo && (
+              <View style={styles.videoPlayerContainer}>
+                {isPlayingVideo ? (
+                  <View style={{ width: '100%', height: 220, backgroundColor: '#000' }}>
+                    {Platform.OS === 'web' ? (
+                      <iframe
+                        width="100%"
+                        height="220"
+                        src={`https://www.youtube-nocookie.com/embed/${getVideoId(activeGuideModal.youtubeId, activeGuideModal.videoUrl)}?autoplay=1&playsinline=1&controls=1&rel=0`}
+                        style={{ border: 'none' }}
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        referrerPolicy="strict-origin-when-cross-origin"
+                        allowFullScreen
+                      />
+                    ) : (
+                      <WebView
+                        originWhitelist={['*']}
+                        source={{
+                          html: `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><meta name="referrer" content="strict-origin-when-cross-origin"><style>*{margin:0;padding:0;box-sizing:border-box;background:#000;}html,body{width:100%;height:100%;overflow:hidden;background:#000;}iframe{width:100%;height:100%;border:none;}</style></head><body><iframe src="https://www.youtube-nocookie.com/embed/${getVideoId(activeGuideModal.youtubeId, activeGuideModal.videoUrl)}?autoplay=1&playsinline=1&controls=1&rel=0&enablejsapi=1&origin=https://localhost&widget_referrer=https://localhost" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></body></html>`,
+                          baseUrl: 'https://localhost',
+                        }}
+                        style={{ width: '100%', height: 220 }}
+                        allowsInlineMediaPlayback={true}
+                        mediaPlaybackRequiresUserAction={false}
+                        allowsFullscreenVideo={true}
+                        javaScriptEnabled={true}
+                        domStorageEnabled={true}
+                        mixedContentMode="always"
+                      />
+                    )}
+                  </View>
+                ) : (
                   <ImageBackground
                     source={activeGuideModal?.image || { uri: activeGuideModal?.thumbnailUrl || 'https://img.youtube.com/vi/rUrb1zxJP3o/hqdefault.jpg' }}
-                    style={[StyleSheet.absoluteFillObject, { zIndex: 10, width: '100%', height: 220 }]}
+                    style={styles.videoPlayerFrame}
                   >
                     <LinearGradient
                       colors={['rgba(0,0,0,0.2)', 'rgba(0,0,0,0.75)']}

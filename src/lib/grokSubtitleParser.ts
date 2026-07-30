@@ -78,7 +78,14 @@ export async function fetchRealYouTubeSubtitles(videoId: string): Promise<string
 export async function parseYouTubeVideoDetailsWithGrokAI(
   video: YouTubeFarmingItem
 ): Promise<GrokParsedVideoDetails> {
+  const startTime = Date.now();
+  console.log(`\n======================================================`);
+  console.log(`[AVANI AI ARCHITECT] 🚀 Starting Summary Generation for Video ID: ${video?.id || 'UNKNOWN'}`);
+  console.log(`[AVANI AI ARCHITECT] 📌 Title: "${video?.titleEn || video?.titleNe || 'Untitled Video'}"`);
+  console.log(`======================================================`);
+
   if (!video || !video.id) {
+    console.log(`[AVANI AI ARCHITECT] ⚠️ No video or video ID provided. Returning default fallback blocks.`);
     return getDefaultParsedDetails(video);
   }
 
@@ -90,51 +97,58 @@ export async function parseYouTubeVideoDetailsWithGrokAI(
     if (cached) {
       const parsed = JSON.parse(cached);
       if (parsed && parsed.dynamicBlocks && Array.isArray(parsed.dynamicBlocks) && parsed.dynamicBlocks.length > 0) {
-        console.log(`[Cache HIT] Returning instant 0ms block-based analysis for ${video.id}`);
+        console.log(`[AVANI AI ARCHITECT] ⚡ [CACHE HIT] Found pre-generated block layout (${parsed.dynamicBlocks.length} blocks) in local storage for ${video.id}! (0ms)`);
         return parsed;
       }
     }
   } catch (err) {
-    console.warn('Cache error in subtitle parser:', err);
+    console.warn('[AVANI AI ARCHITECT] ⚠️ Cache read warning:', err);
   }
 
-  // 2. Call live Render Microservice (yt-dlp + Groq Whisper + Groq Llama)
+  console.log(`[AVANI AI ARCHITECT] 🔍 [CACHE MISS] Fetching fresh AI analysis...`);
+
+  // 2. Call live Render Microservice (yt-dlp + Groq Whisper + Groq Llama 70B)
   const renderServerUrl = process.env.EXPO_PUBLIC_YTDLP_SERVER_URL || 'https://avani-yt-backend.onrender.com';
   try {
     const videoWatchUrl = `https://www.youtube.com/watch?v=${video.id}`;
-    console.log(`[Render Backend API] Requesting full AI analysis for ${video.id} from ${renderServerUrl}...`);
+    console.log(`[AVANI AI ARCHITECT] 🌐 Requesting Block Architect AI from Render backend: ${renderServerUrl}...`);
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25000);
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
+    const reqStart = Date.now();
     const backendRes = await fetch(`${renderServerUrl}/youtube-full-analysis?url=${encodeURIComponent(videoWatchUrl)}`, {
       signal: controller.signal
     });
 
     clearTimeout(timeoutId);
+    const reqElapsed = Date.now() - reqStart;
 
     if (backendRes.ok) {
       const data = await backendRes.json();
       const analysis = data.analysis;
-      // New Block Architect format: { blocks: [...] }
       if (data.success && analysis && analysis.blocks && Array.isArray(analysis.blocks) && analysis.blocks.length > 0) {
         const result: GrokParsedVideoDetails = { 
           dynamicBlocks: analysis.blocks,
           dynamicBlocksNe: data.analysis_ne?.blocks || undefined,
         };
-        console.log(`[Render Backend SUCCESS] Block Architect returned ${analysis.blocks.length} blocks for ${video.id}!`);
+        console.log(`[AVANI AI ARCHITECT] ✅ [BACKEND SUCCESS] Render backend returned ${analysis.blocks.length} English blocks & ${data.analysis_ne?.blocks?.length || 0} Nepali blocks in ${reqElapsed}ms!`);
         await AsyncStorage.setItem(cacheKey, JSON.stringify(result)).catch(() => {});
         return result;
+      } else {
+        console.warn(`[AVANI AI ARCHITECT] ⚠️ Render backend response missing blocks format:`, data);
       }
+    } else {
+      console.warn(`[AVANI AI ARCHITECT] ⚠️ Render backend returned HTTP error ${backendRes.status}`);
     }
-  } catch (backendErr) {
-    console.warn('[Render Backend Notice - Falling back to direct client Groq API]:', backendErr);
+  } catch (backendErr: any) {
+    console.warn(`[AVANI AI ARCHITECT] ⚠️ Render backend request failed (${backendErr?.message || backendErr}). Triggering direct Groq fallback...`);
   }
 
   // 3. Fallback: Fetch REAL Spoken Subtitles directly from YouTube TimedText API
+  console.log(`[AVANI AI ARCHITECT] 📑 Attempting direct client-side subtitle extraction...`);
   let realSubtitleText = await fetchRealYouTubeSubtitles(video.id);
 
-  // 3. Fetch rich snippet metadata from YouTube Data API as supplemental context
   let fullTitle = video.titleEn || video.titleNe || '';
   let fullDesc = video.subtitleEn || video.subtitleNe || '';
 
@@ -152,20 +166,20 @@ export async function parseYouTubeVideoDetailsWithGrokAI(
       }
     }
   } catch (err) {
-    console.warn('Error fetching YouTube video snippet:', err);
+    console.warn('[AVANI AI ARCHITECT] ⚠️ Error fetching snippet:', err);
   }
 
   const combinedTranscriptContext = realSubtitleText 
     ? `Real Spoken Subtitles: "${realSubtitleText.slice(0, 2000)}"`
     : `Description/Metadata: "${fullDesc.slice(0, 1200)}"`;
 
-  // 4. Ask Grok AI to dynamically generate video-accurate summary, dosage table & step-by-step plan
+  // 4. Ask Grok AI client-side to dynamically generate block layout
   const systemPrompt = `You are Avani AI's Master Agronomist and Video Subtitle Analyst for Nepalese Agriculture.
 Analyze this YouTube video's title and REAL SPOKEN SUBTITLES/TRANSCRIPT:
 Video Title: "${fullTitle}"
 ${combinedTranscriptContext}
 
-Identify the EXACT crop or farming topic of THIS specific video (whether it is Dragon Fruit, Ginger, Cardamom, Tomato, Mushroom, Citrus, Paddy, Maize, Wheat, Potato, Mustard, Organic Farming, Poultry, Beekeeping, etc.).
+Identify the EXACT crop or farming topic of THIS specific video.
 
 Generate analysis using the Block Architect system. Pick 5-8 UI blocks from these types:
 CONTENT: hero_summary, quote_highlight, fun_fact, key_takeaways, narrator_note
@@ -184,7 +198,7 @@ Return JSON: { "blocks": [ { "type": "hero_summary", "data": { "title": "...", "
 Return raw JSON ONLY. No markdown.`;
 
   try {
-    console.log(`[Block Architect Client] Generating dynamic block layout for ${video.id} with Groq AI...`);
+    console.log(`[AVANI AI ARCHITECT] 🤖 [GROQ CLIENT FALLBACK] Sending transcript to Groq Llama 70B directly...`);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -210,7 +224,6 @@ Return raw JSON ONLY. No markdown.`;
       const data = await res.json();
       const rawText = data.choices?.[0]?.message?.content || '';
 
-      // Robust JSON Object Extraction
       const match = rawText.match(/\{[\s\S]*\}/);
       if (match) {
         const parsedObj = JSON.parse(match[0]);
@@ -219,16 +232,17 @@ Return raw JSON ONLY. No markdown.`;
             dynamicBlocks: parsedObj.blocks,
             dynamicBlocksNe: parsedObj.blocksNe || parsedObj.dynamicBlocksNe || undefined,
           };
-          console.log(`[Block Architect Client] Successfully generated ${parsedObj.blocks.length} blocks for ${video.id}`);
+          console.log(`[AVANI AI ARCHITECT] ✅ [GROQ CLIENT SUCCESS] Direct Groq API generated ${parsedObj.blocks.length} blocks in ${Date.now() - startTime}ms!`);
           await AsyncStorage.setItem(cacheKey, JSON.stringify(result)).catch(() => {});
           return result;
         }
       }
     }
-  } catch (err) {
-    console.warn('[Block Architect Client handled fallback]:', err);
+  } catch (err: any) {
+    console.warn(`[AVANI AI ARCHITECT] ⚠️ Direct Groq API failed:`, err);
   }
 
+  console.log(`[AVANI AI ARCHITECT] 📋 Returning default structured blocks fallback.`);
   return getDefaultParsedDetails(video);
 }
 
