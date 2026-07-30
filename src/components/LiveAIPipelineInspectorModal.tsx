@@ -151,17 +151,18 @@ export const LiveAIPipelineInspectorModal: React.FC<LiveAIPipelineInspectorModal
                 <iframe
                   width="100%"
                   height="210"
-                  src={`https://www.youtube.com/embed/${extractId(activeUrl)}?autoplay=1&playsinline=1&controls=1&rel=0`}
+                  src={`https://www.youtube-nocookie.com/embed/${extractId(activeUrl)}?autoplay=1&playsinline=1&controls=1&rel=0`}
                   style={{ border: 'none', borderRadius: 12 }}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  referrerPolicy="strict-origin-when-cross-origin"
                   allowFullScreen
                 />
               ) : (
                 <WebView
                   originWhitelist={['*']}
                   source={{
-                    html: `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>*{margin:0;padding:0;box-sizing:border-box;background:#000;}html,body{width:100%;height:100%;overflow:hidden;background:#000;}iframe{width:100%;height:100%;border:none;}</style></head><body><iframe src="https://www.youtube.com/embed/${extractId(activeUrl)}?autoplay=1&playsinline=1&controls=1&rel=0&enablejsapi=1&origin=https://www.youtube.com" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="width:100%;height:100%;border:none;"></iframe></body></html>`,
-                    baseUrl: 'https://www.youtube.com',
+                    html: `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><meta name="referrer" content="strict-origin-when-cross-origin"><style>*{margin:0;padding:0;box-sizing:border-box;background:#000;}html,body{width:100%;height:100%;overflow:hidden;background:#000;}iframe{width:100%;height:100%;border:none;}</style></head><body><iframe src="https://www.youtube-nocookie.com/embed/${extractId(activeUrl)}?autoplay=1&playsinline=1&controls=1&rel=0&enablejsapi=1&origin=https://localhost&widget_referrer=https://localhost" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="width:100%;height:100%;border:none;"></iframe></body></html>`,
+                    baseUrl: 'https://localhost',
                   }}
                   style={{ height: 210, width: '100%', borderRadius: 12 }}
                   allowsInlineMediaPlayback={true}
