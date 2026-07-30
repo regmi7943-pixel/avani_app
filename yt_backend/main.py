@@ -266,8 +266,10 @@ def youtube_full_analysis(url: str):
                                 words = [s.get("utf8", "").strip() for ev in events for s in ev.get("segs", []) if s.get("utf8")]
                                 transcript = " ".join([w for w in words if w])
                                 print(f"[STEP 2 FALLBACK OK] TimedText transcript length: {len(transcript)}")
-            except Exception as sub_err:
-                print(f"[STEP 2 FALLBACK FAIL] TimedText error: {sub_err}")
+        # Fallback if no transcript extracted (e.g. datacenter IP block or no captions)
+        if not transcript or not transcript.strip():
+            print("[STEP 2] No spoken transcript extracted. Using title & description as context...")
+            transcript = f"Video Title: {title}. Video Description: {description}. Provide comprehensive step-by-step agricultural guidance for this topic based on the title and description."
 
         # ──────────────────────────────────────────
         # STEP 3: Groq Llama 70B Versatile — BLOCK ARCHITECT AI
