@@ -9,6 +9,7 @@ const GROQ_API_KEY = process.env.EXPO_PUBLIC_GROQ_API_KEY || '';
 
 export interface GrokParsedVideoDetails {
   dynamicBlocks: AgriUIBlock[];
+  dynamicBlocksNe?: AgriUIBlock[];  // Nepali translated blocks
   // Legacy fields kept for backward compat but no longer used for rendering
   summaryEn?: string;
   summaryNe?: string;
@@ -117,7 +118,10 @@ export async function parseYouTubeVideoDetailsWithGrokAI(
       const analysis = data.analysis;
       // New Block Architect format: { blocks: [...] }
       if (data.success && analysis && analysis.blocks && Array.isArray(analysis.blocks) && analysis.blocks.length > 0) {
-        const result: GrokParsedVideoDetails = { dynamicBlocks: analysis.blocks };
+        const result: GrokParsedVideoDetails = { 
+          dynamicBlocks: analysis.blocks,
+          dynamicBlocksNe: data.analysis_ne?.blocks || undefined,
+        };
         console.log(`[Render Backend SUCCESS] Block Architect returned ${analysis.blocks.length} blocks for ${video.id}!`);
         await AsyncStorage.setItem(cacheKey, JSON.stringify(result)).catch(() => {});
         return result;
@@ -211,7 +215,10 @@ Return raw JSON ONLY. No markdown.`;
       if (match) {
         const parsedObj = JSON.parse(match[0]);
         if (parsedObj && parsedObj.blocks && Array.isArray(parsedObj.blocks) && parsedObj.blocks.length > 0) {
-          const result: GrokParsedVideoDetails = { dynamicBlocks: parsedObj.blocks };
+          const result: GrokParsedVideoDetails = { 
+            dynamicBlocks: parsedObj.blocks,
+            dynamicBlocksNe: parsedObj.blocksNe || parsedObj.dynamicBlocksNe || undefined,
+          };
           console.log(`[Block Architect Client] Successfully generated ${parsedObj.blocks.length} blocks for ${video.id}`);
           await AsyncStorage.setItem(cacheKey, JSON.stringify(result)).catch(() => {});
           return result;
@@ -379,7 +386,10 @@ export async function inspectLiveAIPipeline(
       if (data.success && data.analysis) {
         // Convert Block Architect response to GrokParsedVideoDetails
         const analysisResult: GrokParsedVideoDetails = data.analysis.blocks 
-          ? { dynamicBlocks: data.analysis.blocks }
+          ? { 
+              dynamicBlocks: data.analysis.blocks,
+              dynamicBlocksNe: data.analysis_ne?.blocks || undefined,
+            }
           : data.analysis;
 
         const finalTranscript = clientTranscript || data.transcript || "Transcribed real-time spoken audio stream successfully using Groq Whisper.";

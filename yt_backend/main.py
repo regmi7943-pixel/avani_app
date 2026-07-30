@@ -466,6 +466,7 @@ RULES:
 - NEVER use dosage_chart for livestock
 - NEVER use breed_card for crops
 - Fill ALL data fields with REAL content from the transcript. Use Nepali farming units (ropani, muri, kg).
+Generate ALL content in ENGLISH ONLY. Do not use any Nepali or Hindi text.
 
 Return ONLY this JSON:
 {{"blocks":[...array of block objects...]}}
@@ -499,10 +500,47 @@ No markdown. No explanation. Raw JSON only."""
             parsed_analysis = json.loads(json_match.group(0)) if json_match else {"rawText": raw_content}
 
             print(f"[STEP 3 OK] Analysis complete for: {title}")
+
+            # STEP 4: Translate blocks to Nepali using second 70B call
+            nepali_blocks = None
+            try:
+                translate_prompt = f"""Translate this JSON to Nepali. Keep all JSON keys in English. Only translate the string VALUES to Nepali (नेपाली). Keep numbers, dates, and technical terms (like chemical names, NPR, kg) as-is.
+
+Input JSON:
+{json.dumps(parsed_analysis)}
+
+Return the SAME JSON structure with all string values translated to Nepali. Raw JSON only, no markdown."""
+
+                translate_res = requests.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {GROQ_API_KEY}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": "llama-3.3-70b-versatile",
+                        "messages": [{"role": "user", "content": translate_prompt}],
+                        "temperature": 0.1,
+                        "max_tokens": 2500
+                    },
+                    timeout=30,
+                )
+
+                if translate_res.status_code == 200:
+                    translate_json = translate_res.json()
+                    translate_content = translate_json["choices"][0]["message"]["content"]
+                    translate_match = re.search(r'\{[\s\S]*\}', translate_content)
+                    if translate_match:
+                        nepali_blocks = json.loads(translate_match.group(0))
+                        print(f"[STEP 4 OK] Nepali translation complete for: {title}")
+            except Exception as translate_err:
+                print(f"[STEP 4 WARN] Nepali translation failed, serving English only: {translate_err}")
+
             return {
                 "success": True,
                 "transcript": transcript,
-                "analysis": parsed_analysis
+                "analysis": parsed_analysis,
+                "analysis_ne": nepali_blocks
             }
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"LLM Summarization failed: {str(e)}")
