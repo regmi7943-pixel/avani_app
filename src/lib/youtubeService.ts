@@ -469,6 +469,28 @@ function formatViewCount(countStr?: string): string {
   return `${num} views`;
 }
 
+export function filterHighQualityVideos(videos: any[], statsMap: Map<string, any>): any[] {
+  return videos.filter(v => {
+    const id = v.id?.videoId || v.id;
+    const stats = statsMap.get(id);
+    if (!stats) return true; // Keep if no stats available
+    const views = parseInt(stats.viewCount || '0');
+    const likes = parseInt(stats.likeCount || '0');
+    // Minimum 1000 views and 2% like ratio
+    if (views < 1000) return false;
+    if (views > 0 && likes > 0 && (likes / views) < 0.02) return false;
+    return true;
+  }).sort((a, b) => {
+    const idA = a.id?.videoId || a.id;
+    const idB = b.id?.videoId || b.id;
+    const statsA = statsMap.get(idA);
+    const statsB = statsMap.get(idB);
+    const scoreA = statsA ? parseInt(statsA.viewCount || '0') * (parseInt(statsA.likeCount || '1') / Math.max(1, parseInt(statsA.viewCount || '1'))) : 0;
+    const scoreB = statsB ? parseInt(statsB.viewCount || '0') * (parseInt(statsB.likeCount || '1') / Math.max(1, parseInt(statsB.viewCount || '1'))) : 0;
+    return scoreB - scoreA; // Higher quality first
+  });
+}
+
 export async function fetchGoogleYouTubeVideos(
   cropFilter: string = 'all',
   searchQuery: string = '',
@@ -494,7 +516,7 @@ export async function fetchGoogleYouTubeVideos(
   }
 
   try {
-    let url = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=50&q=${encodeURIComponent(qText)}&type=video&key=${GOOGLE_YOUTUBE_API_KEY}`;
+    let url = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=50&q=${encodeURIComponent(qText)}&type=video&regionCode=NP&relevanceLanguage=ne&videoDuration=medium&videoDefinition=high&key=${GOOGLE_YOUTUBE_API_KEY}`;
     if (pageToken) {
       url += `&pageToken=${pageToken}`;
     }
@@ -533,6 +555,7 @@ export async function fetchGoogleYouTubeVideos(
 
       // Query contentDetails & statistics for exact real duration
       const detailsMap = new Map<string, { duration: string; views: string }>();
+      const statsMap = new Map<string, any>();
       if (validVids.length > 0) {
         try {
           const detailUrl = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails,statistics&id=${validVids.join(',')}&key=${GOOGLE_YOUTUBE_API_KEY}`;
@@ -546,6 +569,9 @@ export async function fetchGoogleYouTubeVideos(
                 duration: parseIsoDuration(isoDur),
                 views: formatViewCount(viewCnt)
               });
+              if (dItem.statistics) {
+                statsMap.set(dItem.id, dItem.statistics);
+              }
             }
           }
         } catch (detailErr) {
@@ -604,9 +630,11 @@ export async function fetchGoogleYouTubeVideos(
         });
       }
 
-      if (results.length > 0) {
-        console.log(`[YouTube API Diagnostic] Successfully parsed ${results.length} live YouTube videos.`);
-        return { items: results, nextPageToken: returnedNextPageToken };
+      const filteredResults = filterHighQualityVideos(results, statsMap);
+
+      if (filteredResults.length > 0) {
+        console.log(`[YouTube API Diagnostic] Successfully parsed ${filteredResults.length} live YouTube videos.`);
+        return { items: filteredResults, nextPageToken: returnedNextPageToken };
       }
     }
   } catch (err) {
