@@ -317,6 +317,135 @@ AVAILABLE BLOCKS WITH SCHEMAS:
 25. comparison_table:
     {{"type":"comparison_table","data":{{"title":"...","headers":["Option A","Option B"],"rows":[{{"feature":"...","values":["...","..."]}}]}}}}
 
+26. quote_highlight:
+    {{"type":"quote_highlight","data":{{"quote":"...","speakerName":"...","speakerTitle":"optional"}}}}
+
+27. fun_fact:
+    {{"type":"fun_fact","data":{{"fact":"...","category":"optional","icon":"optional"}}}}
+
+28. video_context:
+    {{"type":"video_context","data":{{"region":"...","climateZone":"...","season":"...","farmingType":"...","targetCropsOrLivestock":["..."]}}}}
+
+29. narrator_note:
+    {{"type":"narrator_note","data":{{"note":"...","importance":"low/medium/high/critical","authorName":"optional"}}}}
+
+30. audio_snippet_transcript:
+    {{"type":"audio_snippet_transcript","data":{{"speaker":"...","startTime":"...","endTime":"...","transcriptText":"..."}}}}
+
+31. numbered_process:
+    {{"type":"numbered_process","data":{{"processName":"...","totalPhases":3,"phases":[{{"phaseIndex":1,"name":"...","description":"...","estimatedDays":14}}]}}}}
+
+32. quick_steps:
+    {{"type":"quick_steps","data":{{"title":"...","summary":"...","actions":["action 1","action 2"]}}}}
+
+33. decision_tree:
+    {{"type":"decision_tree","data":{{"rootQuestion":"...","nodes":[{{"id":"1","condition":"...","outcomeIfTrue":"...","outcomeIfFalse":"..."}}]}}}}
+
+34. flowchart_steps:
+    {{"type":"flowchart_steps","data":{{"workflowName":"...","nodes":[{{"id":"1","label":"...","type":"start/process/decision/end","notes":"optional"}}]}}}}
+
+35. troubleshooting_steps:
+    {{"type":"troubleshooting_steps","data":{{"issueCategory":"...","troubleshootingGrid":[{{"symptom":"...","probableCause":"...","solution":"...","urgency":"low/moderate/urgent"}}]}}}}
+
+36. nutrient_table:
+    {{"type":"nutrient_table","data":{{"materialName":"...","nitrogenPercent":2.5,"phosphorusPercent":1.2,"potassiumPercent":1.8,"organicMatterPercent":25,"micronutrients":[{{"name":"Zinc","ppmOrPercent":"50ppm"}}]}}}}
+
+37. roi_calculator:
+    {{"type":"roi_calculator","data":{{"investmentName":"...","currency":"NPR","initialInvestment":50000,"expectedRevenue":120000,"estimatedOperationalCost":30000,"netProfit":40000,"paybackPeriodMonths":8,"roiPercentage":80}}}}
+
+38. measurement_specs:
+    {{"type":"measurement_specs","data":{{"title":"...","measurements":[{{"parameter":"...","value":"...","optimalRange":"optional","unit":"cm/kg/L"}}]}}}}
+
+39. soil_test_report:
+    {{"type":"soil_test_report","data":{{"sampleLocation":"...","phLevel":6.5,"ecValue":0.8,"organicCarbonPercent":1.2,"nitrogenStatus":"Low/Medium/High","phosphorusStatus":"Low/Medium/High","potassiumStatus":"Low/Medium/High","recommendations":["..."]}}}}
+
+40. feed_conversion_ratio (ONLY for livestock):
+    {{"type":"feed_conversion_ratio","data":{{"animalType":"...","fcrRatio":2.5,"feedConsumedKg":100,"weightGainedKg":40,"periodDays":90,"benchmarks":"..."}}}}
+
+41. faq_list:
+    {{"type":"faq_list","data":{{"faqs":[{{"question":"...","answer":"..."}}]}}}}
+
+42. tool_list:
+    {{"type":"tool_list","data":{{"category":"...","tools":[{{"name":"...","isEssential":true,"estimatedCostRange":"optional","alternative":"optional"}}]}}}}
+
+43. requirement_list:
+    {{"type":"requirement_list","data":{{"title":"...","requirements":[{{"name":"...","type":"climate/water/soil/legal/capital","isMandatory":true,"description":"..."}}]}}}}
+
+44. organic_cert_checklist:
+    {{"type":"organic_cert_checklist","data":{{"standardName":"...","criteria":[{{"rule":"...","complianceMethod":"...","prohibitedInputs":["..."]}}]}}}}
+
+45. timeline:
+    {{"type":"timeline","data":{{"title":"...","events":[{{"dateOrPeriod":"...","title":"...","description":"..."}}]}}}}
+
+46. monthly_planner:
+    {{"type":"monthly_planner","data":{{"months":[{{"month":"Baishakh/Jestha/etc","primaryTasks":["..."],"secondaryTasks":["optional"]}}]}}}}
+
+47. harvest_schedule:
+    {{"type":"harvest_schedule","data":{{"cropName":"...","firstHarvestDays":90,"harvestWindowDays":30,"maturityIndicators":["..."],"postHarvestStorageDays":14,"idealStorageTemp":"15-20°C"}}}}
+
+48. gestation_timeline (ONLY for livestock breeding):
+    {{"type":"gestation_timeline","data":{{"animalSpecies":"...","gestationDaysAvg":150,"keyMilestones":[{{"dayOrWeek":"...","event":"...","careRequired":"..."}}]}}}}
+
+49. pest_identification:
+    {{"type":"pest_identification","data":{{"pestName":"...","scientificName":"optional","damageType":"...","identifyingFeatures":["..."],"naturalPredators":["..."],"controlThreshold":"...","recommendedControl":["..."]}}}}
+
+50. soil_profile:
+    {{"type":"soil_profile","data":{{"soilType":"Clay/Sandy/Loam/Silt","drainageQuality":"Poor/Moderate/Good/Excessive","idealPhRange":"...","suitableCrops":["..."],"improvementTips":["..."]}}}}
+
+51. irrigation_plan:
+    {{"type":"irrigation_plan","data":{{"systemType":"Drip/Sprinkler/Flood/Subsurface/Rainfed","waterRequirementLitersPerDay":500,"wateringFrequency":"...","bestTimeOfDay":"...","moistureMonitoringTip":"..."}}}}
+
+52. seed_variety:
+    {{"type":"seed_variety","data":{{"varietyName":"...","type":"Heirloom/Hybrid (F1)/Open-Pollinated","daysToMaturity":90,"diseaseResistance":["..."],"yieldPotential":"...","seedRatePerAcre":"..."}}}}
+
+53. spray_timing:
+    {{"type":"spray_timing","data":{{"targetPestOrDisease":"...","idealWindSpeedKmh":"<10","idealTempRangeC":"20-30","rainfastHours":4,"recommendedTimeOfDay":"Early Morning/Late Afternoon/Night","ppeRequired":["Gloves","Mask"]}}}}
+
+54. weather_advisory:
+    {{"type":"weather_advisory","data":{{"alertLevel":"Info/Warning/Severe/Critical","weatherCondition":"...","affectedOperations":["..."],"protectiveMeasures":["..."],"validPeriod":"..."}}}}
+
+55. aquaponics_setup:
+    {{"type":"aquaponics_setup","data":{{"fishSpecies":"...","cropSpecies":["..."],"phTarget":7.0,"waterTempRangeC":"22-28","stockingDensityKgPerLiter":"..."}}}}
+
+56. apiculture_hive_card (ONLY for beekeeping):
+    {{"type":"apiculture_hive_card","data":{{"queenStatus":"Spotted/Eggs Present/Queenless/Virgin Queen","temperament":"Calm/Aggressive/Moderate","broodPattern":"Solid/Spotty/Low","honeyStores":"Low/Medium/High","diseaseOrParasiteObserved":["..."],"actionTaken":"..."}}}}
+
+57. mushroom_flushing_card (ONLY for mushroom cultivation):
+    {{"type":"mushroom_flushing_card","data":{{"mushroomVariety":"...","substrateType":"...","incubationTempC":"22-25","fruitingTempC":"15-20","relativeHumidityPercent":"85-95%","expectedFlushes":4}}}}
+
+58. weed_identification:
+    {{"type":"weed_identification","data":{{"weedName":"...","category":"Broadleaf/Grassy/Sedge","reproductionMethod":"...","competesWithCrops":["..."],"controlMethods":["..."]}}}}
+
+59. pruning_guide:
+    {{"type":"pruning_guide","data":{{"plantType":"...","bestSeason":"...","toolRequired":"...","targetShape":"...","pruningSteps":["..."],"postPruningCare":"..."}}}}
+
+60. maintenance_checklist:
+    {{"type":"maintenance_checklist","data":{{"equipmentName":"...","intervalHoursOrMonths":"...","tasks":[{{"component":"...","action":"Check/Clean/Replace/Grease/Calibrate","specification":"optional"}}]}}}}
+
+61. market_price:
+    {{"type":"market_price","data":{{"commodityName":"...","marketName":"...","pricePerUnit":"...","currency":"NPR","priceTrend":"Up/Down/Stable","dateUpdated":"...","qualityGrade":"..."}}}}
+
+62. investment_table:
+    {{"type":"investment_table","data":{{"currency":"NPR","capexItems":[{{"item":"...","cost":10000}}],"opexItems":[{{"item":"...","annualCost":5000}}],"totalInitialCapitalRequired":50000}}}}
+
+63. loan_calculator:
+    {{"type":"loan_calculator","data":{{"loanSchemeName":"...","principalAmount":100000,"annualInterestRatePercent":8,"tenureYears":5,"estimatedMonthlyEmi":2000,"totalInterestPayable":20000}}}}
+
+64. success_box:
+    {{"type":"success_box","data":{{"title":"...","achievement":"...","metric":"optional"}}}}
+
+65. info_box:
+    {{"type":"info_box","data":{{"title":"optional","content":"..."}}}}
+
+66. stat_highlight:
+    {{"type":"stat_highlight","data":{{"bigStat":"...","statLabel":"...","subtext":"optional","accentColor":"optional"}}}}
+
+67. badge_row:
+    {{"type":"badge_row","data":{{"badges":[{{"label":"...","variant":"success/warning/info/neutral"}}]}}}}
+
+68. separator:
+    {{"type":"separator","data":{{"label":"optional","style":"solid/dashed/dotted"}}}}
+
 RULES:
 - ALWAYS start with hero_summary
 - ALWAYS end with tip_box or warning_box
@@ -328,6 +457,12 @@ RULES:
 - For BUSINESS: hero_summary + business_plan_summary + cost_breakdown + metric_row + tip_box
 - For COMPOST/ORGANIC: hero_summary + compost_recipe or ingredient_list + step_list + tip_box
 - For SUBSIDY: hero_summary + subsidy_info + checklist + tip_box
+- For BEEKEEPING: hero_summary + apiculture_hive_card + season_calendar + checklist + tip_box
+- For MUSHROOM: hero_summary + mushroom_flushing_card + step_list + ingredient_list + tip_box
+- For AQUAPONICS/FISH: hero_summary + aquaponics_setup + cost_breakdown + step_list + tip_box
+- For SOIL TESTING: hero_summary + soil_test_report + soil_profile + requirement_list + tip_box
+- For MARKET PRICES: hero_summary + market_price + comparison_table + metric_row + tip_box
+- For PRUNING/GRAFTING: hero_summary + pruning_guide + growth_stages + tool_list + tip_box
 - NEVER use dosage_chart for livestock
 - NEVER use breed_card for crops
 - Fill ALL data fields with REAL content from the transcript. Use Nepali farming units (ropani, muri, kg).
