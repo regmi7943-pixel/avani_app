@@ -75,6 +75,14 @@ export async function fetchRealYouTubeSubtitles(videoId: string): Promise<string
 /**
  * Parses YouTube video subtitles & metadata using Grok AI for ANY agricultural topic (Dragon Fruit, Ginger, Paddy, Maize, Potato, etc.).
  */
+/**
+ * Wakes up the Render microservice in the background on app/screen load to eliminate cold-start delay
+ */
+export function preloadWakeupBackend() {
+  const renderServerUrl = process.env.EXPO_PUBLIC_YTDLP_SERVER_URL || 'https://avani-yt-backend.onrender.com';
+  fetch(`${renderServerUrl}/ping`).catch(() => {});
+}
+
 export async function parseYouTubeVideoDetailsWithGrokAI(
   video: YouTubeFarmingItem
 ): Promise<GrokParsedVideoDetails> {
@@ -114,7 +122,7 @@ export async function parseYouTubeVideoDetailsWithGrokAI(
     console.log(`[AVANI AI ARCHITECT] 🌐 Requesting Block Architect AI from Render backend: ${renderServerUrl}...`);
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
 
     const reqStart = Date.now();
     const backendRes = await fetch(`${renderServerUrl}/youtube-full-analysis?url=${encodeURIComponent(videoWatchUrl)}`, {

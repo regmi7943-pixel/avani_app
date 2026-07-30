@@ -26,7 +26,7 @@ import { supabase } from '../../lib/supabase';
 import { fetchGoogleYouTubeVideos, YouTubeFarmingItem } from '../../lib/youtubeService';
 import { getDailyGrokVideoRecommendation, GrokMatchedVideoResult } from '../../lib/grokVideoRecommender';
 import { filterYouTubeVideosWithGrokAI } from '../../lib/grokVideoCurator';
-import { parseYouTubeVideoDetailsWithGrokAI, GrokParsedVideoDetails } from '../../lib/grokSubtitleParser';
+import { parseYouTubeVideoDetailsWithGrokAI, GrokParsedVideoDetails, preloadWakeupBackend } from '../../lib/grokSubtitleParser';
 import { LiveAIPipelineInspectorModal } from '../../components/LiveAIPipelineInspectorModal';
 import { DynamicAIVideoCard } from '../../components/DynamicAIVideoCard';
 let WebView: any = View;
@@ -627,6 +627,7 @@ export default function TutorialScreen() {
 
   // Fetch live videos from Google YouTube Data API v3 for the 5 selected crops (Fast 25-Video Batch)
   useEffect(() => {
+    preloadWakeupBackend();
     async function loadGoogleYouTubeVideos() {
       setIsLoadingGoogle(true);
       console.log(`[TutorialScreen UI] Requesting YouTube videos | Selected Crop: "${selectedCrop}" | Search Query: "${searchQuery}"`);
