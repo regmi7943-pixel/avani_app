@@ -3,6 +3,7 @@ import tempfile
 import requests
 import json
 import re
+from typing import Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 import yt_dlp
@@ -89,7 +90,7 @@ def _get_ydl_opts(temp_dir: str, outtmpl_name: str = "audio") -> dict:
     return opts
 
 
-def _find_audio_file(temp_dir: str, base_name: str = "audio") -> str | None:
+def _find_audio_file(temp_dir: str, base_name: str = "audio") -> Optional[str]:
     """Locate the downloaded audio file — yt-dlp may rename it."""
     expected = os.path.join(temp_dir, f"{base_name}.mp3")
     if os.path.exists(expected):
