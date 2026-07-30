@@ -149,10 +149,12 @@ def youtube_full_analysis(url: str):
 
     with tempfile.TemporaryDirectory() as temp_dir:
         title = "YouTube Video"
+        description = ""
+        channel_name = ""
         transcript = ""
 
         # ──────────────────────────────────────────
-        # STEP 1a: Extract video title via YouTube oEmbed API (always works, no auth needed)
+        # STEP 1a: Extract video title & channel via YouTube oEmbed API (always works, no auth needed)
         # ──────────────────────────────────────────
         try:
             oembed_res = requests.get(
@@ -160,23 +162,60 @@ def youtube_full_analysis(url: str):
                 timeout=10,
             )
             if oembed_res.ok:
-                title = oembed_res.json().get("title", "YouTube Video")
-                print(f"[STEP 1a OK] Got title via oEmbed: {title}")
+                oembed_data = oembed_res.json()
+                title = oembed_data.get("title", "YouTube Video")
+                channel_name = oembed_data.get("author_name", "")
+                print(f"[STEP 1a OK] Got title via oEmbed: {title}, channel: {channel_name}")
         except Exception as e:
             print(f"[STEP 1a] oEmbed title extraction note: {e}")
 
         # ──────────────────────────────────────────
-        # STEP 1b: Try to download audio (may fail on datacenter IPs)
+        # STEP 1b: Try to download audio & extract info (may fail on datacenter IPs)
         # ──────────────────────────────────────────
         opts = _get_ydl_opts(temp_dir)
         download_success = False
         try:
             with yt_dlp.YoutubeDL(opts) as ydl:
-                ydl.download([url])
+                info = ydl.extract_info(url, download=True)
+                if info:
+                    if info.get('title'):
+                        title = info.get('title')
+                    if info.get('description'):
+                        description = info.get('description', '')[:1500]
+                    if info.get('channel') or info.get('uploader'):
+                        channel_name = info.get('channel', info.get('uploader', ''))
                 download_success = True
                 print(f"[STEP 1b OK] Downloaded audio for: {title}")
         except Exception as e:
             print(f"[STEP 1b SKIP] Audio download blocked (datacenter IP): {e}")
+
+        # Fallback HTML extraction for description and channel name if not already extracted
+        if not description or not channel_name:
+            try:
+                vid_id_match = re.search(r'(?:v=|\/)([0-9A-Za-z_-]{11})', url)
+                if vid_id_match:
+                    vid_id = vid_id_match.group(1)
+                    watch_res = requests.get(
+                        f"https://www.youtube.com/watch?v={vid_id}",
+                        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+                        timeout=15,
+                    )
+                    if watch_res.ok:
+                        html_content = watch_res.text
+                        if not description:
+                            desc_match = re.search(r'<meta\s+name="description"\s+content="([^"]*)"', html_content) or re.search(r'"shortDescription":"([^"]*)"', html_content)
+                            description = desc_match.group(1)[:1500] if desc_match else ''
+                        if not channel_name:
+                            channel_match = re.search(r'"ownerChannelName":"([^"]+)"', html_content) or re.search(r'<link\s+itemprop="name"\s+content="([^"]+)"', html_content)
+                            channel_name = channel_match.group(1) if channel_match else ''
+            except Exception as meta_err:
+                print(f"[STEP 1 Metadata Fallback] Error: {meta_err}")
+
+        # Final fallback safety for metadata
+        if not description:
+            description = ''
+        if not channel_name:
+            channel_name = ''
 
         audio_path = _find_audio_file(temp_dir)
         print(f"[STEP 1] Files in temp_dir: {os.listdir(temp_dir)}, audio_path={audio_path}")
@@ -233,12 +272,36 @@ def youtube_full_analysis(url: str):
         # ──────────────────────────────────────────
         # STEP 3: Groq Llama 70B Versatile — BLOCK ARCHITECT AI
         # ──────────────────────────────────────────
-        prompt = f"""You are the Avani AI Block Architect for Nepali agriculture. Analyze this video and build a PERFECT content layout.
+        prompt = f"""You are the Avani AI Block Architect — an expert agricultural content analyst for Nepali farmers.
 
-TITLE: "{title}"
-TRANSCRIPT: "{transcript[:3000]}"
+VIDEO TITLE: "{title}"
+CHANNEL: "{channel_name}"
+DESCRIPTION: "{description[:1500]}"
+TRANSCRIPT ({len(transcript)} chars): "{transcript[:12000]}"
 
-Your job: Pick 5-8 blocks and fill them with REAL content from the transcript.
+NEPALI FARMING CONTEXT:
+- Land units: 1 Ropani = 500 sq m, 1 Bigha = 6,772 sq m, 1 Kattha = 338 sq m
+- Weight: 1 Muri = 70 kg (rice), 1 Pathi = 3.2 kg
+- Calendar: Baishakh (Apr-May), Jestha (May-Jun), Ashadh (Jun-Jul), Shrawan (Jul-Aug), Bhadra (Aug-Sep), Ashwin (Sep-Oct), Kartik (Oct-Nov), Mangsir (Nov-Dec), Poush (Dec-Jan), Magh (Jan-Feb), Falgun (Feb-Mar), Chaitra (Mar-Apr)
+- Common crops: Rice (Dhaan), Maize (Makai), Wheat (Gahu), Potato (Aalu), Tomato (Golbheda), Ginger (Aduwa), Cardamom (Alaichi), Mustard (Tori), Tea (Chiya)
+- Government schemes: PM Krishi Modernization Project, Krishi Vyavastha Yojana, Nepal Agriculture Research Council (NARC)
+- Common fertilizers available: DAP, Urea, MOP (Potash), SSP, Zinc Sulphate, Borax
+- Common pesticides: Mancozeb, Carbendazim, Imidacloprid, Emamectin Benzoate, Chlorpyrifos, Neem Oil
+
+INSTRUCTIONS — Follow these steps IN ORDER:
+
+STEP 1 — ANALYZE: Read the ENTIRE transcript carefully. What specific topic does this video cover? What crop, animal, equipment, or technique? What specific facts, numbers, dosages, and measurements are mentioned?
+
+STEP 2 — EXTRACT KEY FACTS: List the most important practical information:
+- Specific product names, chemical names, brand names mentioned
+- Exact dosages, quantities, ratios, spacing measurements
+- Specific varieties, breeds, or equipment models mentioned
+- Timeline information (days, weeks, seasons)
+- Cost figures or income potential mentioned
+
+STEP 3 — SELECT BLOCKS: Based on the video type, pick 5-8 blocks from the 68 available types. Use the RULES below to guide selection.
+
+STEP 4 — FILL WITH REAL DATA: Fill EVERY data field with SPECIFIC information extracted from the transcript. NEVER use generic placeholder text like "..." or "specific crop". If the transcript mentions "DAP 12 kg per ropani", write exactly that.
 
 AVAILABLE BLOCKS WITH SCHEMAS:
 
@@ -466,6 +529,7 @@ RULES:
 - NEVER use dosage_chart for livestock
 - NEVER use breed_card for crops
 - Fill ALL data fields with REAL content from the transcript. Use Nepali farming units (ropani, muri, kg).
+- CRITICAL: Every value must come from the transcript. Never invent numbers or use placeholders.
 Generate ALL content in ENGLISH ONLY. Do not use any Nepali or Hindi text.
 
 Return ONLY this JSON:
@@ -487,7 +551,7 @@ No markdown. No explanation. Raw JSON only."""
                     "temperature": 0.15,
                     "max_tokens": 2500
                 },
-                timeout=30,
+                timeout=45,
             )
 
             if llm_res.status_code != 200:
