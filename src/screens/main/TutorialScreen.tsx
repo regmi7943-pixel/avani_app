@@ -807,17 +807,7 @@ export default function TutorialScreen() {
           </Text>
         </View>
 
-        {/* Center: Small Tutorial Pill Badge & AI Pipeline Inspector Button */}
-        <TouchableOpacity
-          style={[styles.tutorialCenterPill, { backgroundColor: 'rgba(16,185,129,0.18)', borderColor: '#10B981' }]}
-          onPress={() => setShowInspectorModal(true)}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="flask" size={13} color="#10B981" />
-          <Text style={[styles.tutorialCenterText, { color: '#10B981', fontWeight: '800' }]}>
-            🧪 TEST AI PIPELINE
-          </Text>
-        </TouchableOpacity>
+
 
         {/* Right: Notifications + Avatar */}
         <View style={styles.headerRight}>
@@ -1238,11 +1228,7 @@ export default function TutorialScreen() {
         </Modal>
       )}
 
-      {/* Live AI Pipeline Inspector & Testing Lab Modal */}
-      <LiveAIPipelineInspectorModal
-        visible={showInspectorModal}
-        onClose={() => setShowInspectorModal(false)}
-      />
+
     </SafeAreaView>
   );
 }
