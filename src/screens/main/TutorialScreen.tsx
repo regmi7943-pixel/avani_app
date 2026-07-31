@@ -584,23 +584,11 @@ export default function TutorialScreen() {
   const [isParsingSubtitles, setIsParsingSubtitles] = useState<boolean>(false);
   const [showInspectorModal, setShowInspectorModal] = useState<boolean>(false);
 
-  // Trigger Grok AI Subtitle & Transcript Parser when activeGuideModal opens
+  // Skip AI Subtitle & Transcript Parser for now as requested (Direct 1-Click Video Mode)
   useEffect(() => {
     if (activeGuideModal) {
       console.log(`[TutorialScreen] 📱 Opened Video Guide Modal for: "${activeGuideModal.titleEn || activeGuideModal.titleNe}" (ID: ${activeGuideModal.id})`);
-      setIsParsingSubtitles(true);
-      setParsedDetails(null);
-      parseYouTubeVideoDetailsWithGrokAI(activeGuideModal as any)
-        .then((result) => {
-          console.log(`[TutorialScreen] 🎯 Summary generation finished for ${activeGuideModal.id}. Received ${result?.dynamicBlocks?.length || 0} blocks.`);
-          setParsedDetails(result);
-        })
-        .catch((err) => {
-          console.error(`[TutorialScreen] ❌ Summary generation error for ${activeGuideModal.id}:`, err);
-        })
-        .finally(() => {
-          setIsParsingSubtitles(false);
-        });
+      setIsPlayingVideo(true); // Direct 1-Click Video Playback
     }
   }, [activeGuideModal]);
 
@@ -923,7 +911,7 @@ export default function TutorialScreen() {
                     activeOpacity={0.92}
                     onPress={() => {
                       setActiveGuideModal(item.guide);
-                      setIsPlayingVideo(false);
+                      setIsPlayingVideo(true);
                     }}
                     style={[styles.heroCardContainer, { width: SW * 0.84 }]}
                   >
@@ -1003,7 +991,7 @@ export default function TutorialScreen() {
                 activeOpacity={0.88}
                 onPress={() => {
                   setActiveGuideModal(item);
-                  setIsPlayingVideo(false);
+                  setIsPlayingVideo(true);
                 }}
                 style={[styles.guideCard, { backgroundColor: colors.card, borderColor: colors.border }]}
               >
@@ -1206,14 +1194,42 @@ export default function TutorialScreen() {
                 </View>
               </View>
 
-              {isParsingSubtitles || !parsedDetails ? (
-                <GrokSubtitleSkeletonLoader isDarkMode={isDarkMode} />
-              ) : (
-                <>
-                  {/* Dynamic AI Block Renderer — all content is AI-generated per video */}
-                  <DynamicAIVideoCard blocks={parsedDetails.dynamicBlocks} isDarkMode={isDarkMode} colors={colors} />
-                </>
-              )}
+              {/* Clean Video Overview & Description */}
+              <View style={{ paddingHorizontal: 18, marginTop: 16 }}>
+                <View style={{ backgroundColor: colors.card, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: colors.border }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                    <Ionicons name="document-text-outline" size={18} color={colors.brandGreen} />
+                    <Text style={{ fontSize: 14, fontWeight: '800', color: colors.text }}>
+                      {language === 'ne' ? 'भिडियो विवरण र मुख्य जानकारी' : 'Video Overview & Details'}
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 13, lineHeight: 20, color: colors.text }}>
+                    {language === 'ne' 
+                      ? (activeGuideModal.subtitleNe || activeGuideModal.dosageSummaryNe || 'यो भिडियोमा दिइएका कृषि विधि र प्राविधिक सल्लाह ध्यानपूर्वक हेर्नुहोस्।')
+                      : (activeGuideModal.subtitleEn || activeGuideModal.dosageSummaryEn || 'Watch the video above for practical step-by-step agricultural instructions.')}
+                  </Text>
+                </View>
+
+                {/* Practical Steps Checklist (If Available) */}
+                {((activeGuideModal.stepsNe && activeGuideModal.stepsNe.length > 0) || (activeGuideModal.stepsEn && activeGuideModal.stepsEn.length > 0)) && (
+                  <View style={{ backgroundColor: colors.card, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: colors.border, marginTop: 14 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+                      <Ionicons name="list-circle-outline" size={20} color={colors.brandGreen} />
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: colors.text }}>
+                        {language === 'ne' ? 'मुख्य अभ्यास चरणहरू' : 'Key Practical Steps'}
+                      </Text>
+                    </View>
+                    {(language === 'ne' ? activeGuideModal.stepsNe || activeGuideModal.stepsEn : activeGuideModal.stepsEn || activeGuideModal.stepsNe)?.map((step, idx) => (
+                      <View key={'step_' + idx} style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
+                        <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: colors.brandGreen + '20', justifyContent: 'center', alignItems: 'center' }}>
+                          <Text style={{ fontSize: 11, fontWeight: '800', color: colors.brandGreen }}>{idx + 1}</Text>
+                        </View>
+                        <Text style={{ flex: 1, fontSize: 12.5, lineHeight: 18, color: colors.text }}>{step}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
 
 
 
