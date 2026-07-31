@@ -133,6 +133,127 @@ def debug_audio_download(url: str):
     return result
 
 
+def _fetch_audio_via_piped_invidious(video_id: str, temp_dir: str) -> dict:
+    """
+    Downloads YouTube audio using Piped or Invidious public instance APIs.
+    Bypasses YouTube datacenter IP blocking and cipher extraction issues.
+    """
+    if not video_id:
+        return {'success': False}
+    
+    if 'http' in video_id or '/' in video_id or 'v=' in video_id:
+        match = re.search(r'(?:v=|/)([0-9A-Za-z_-]{11})', video_id)
+        if match:
+            video_id = match.group(1)
+
+    piped_instances = [
+        "https://pipedapi.kavin.rocks",
+        "https://pipedapi.adminforge.de",
+        "https://pipedapi.mha.fi",
+    ]
+
+    for instance in piped_instances:
+        endpoint = f"{instance}/streams/{video_id}"
+        print(f"[STEP 1b PIPED] Trying instance: {endpoint}")
+        try:
+            res = requests.get(endpoint, timeout=15)
+            if res.status_code == 200:
+                data = res.json()
+                title = data.get("title", "")
+                description = data.get("description", "")
+                uploader = data.get("uploader", "")
+                audio_streams = data.get("audioStreams", [])
+                
+                best_stream = None
+                for s in audio_streams:
+                    fmt = str(s.get("format", ""))
+                    mime = str(s.get("mimeType", ""))
+                    if fmt == "M4A" or "audio/mp4" in mime:
+                        best_stream = s
+                        break
+                if not best_stream and audio_streams:
+                    best_stream = audio_streams[0]
+
+                if best_stream and best_stream.get("url"):
+                    audio_url = best_stream["url"]
+                    audio_res = requests.get(audio_url, timeout=60, stream=True)
+                    if audio_res.status_code == 200:
+                        saved_path = os.path.join(temp_dir, "audio.m4a")
+                        with open(saved_path, "wb") as f:
+                            f.write(audio_res.content)
+                        print(f"[STEP 1b PIPED OK] Downloaded audio via {instance}")
+                        return {
+                            'success': True,
+                            'title': title,
+                            'description': description,
+                            'channel': uploader,
+                            'audio_path': saved_path
+                        }
+                    else:
+                        print(f"[STEP 1b PIPED FAIL] Download audio stream returned HTTP {audio_res.status_code}")
+                else:
+                    print(f"[STEP 1b PIPED FAIL] No audio streams found from {instance}")
+            else:
+                print(f"[STEP 1b PIPED FAIL] {instance} returned HTTP {res.status_code}")
+        except Exception as e:
+            print(f"[STEP 1b PIPED FAIL] {instance} error: {e}")
+
+    invidious_instances = [
+        "https://inv.tux.pizza",
+        "https://invidious.nerdvpn.de",
+        "https://invidious.projectsegfau.lt",
+    ]
+
+    for instance in invidious_instances:
+        endpoint = f"{instance}/api/v1/videos/{video_id}?local=true"
+        print(f"[STEP 1b INVIDIOUS] Trying instance: {endpoint}")
+        try:
+            res = requests.get(endpoint, timeout=15)
+            if res.status_code == 200:
+                data = res.json()
+                title = data.get("title", "")
+                description = (data.get("description") or "")[:1500]
+                author = data.get("author", "")
+                adaptive_formats = data.get("adaptiveFormats", [])
+
+                audio_formats = [f for f in adaptive_formats if str(f.get("type", "")).startswith("audio/")]
+                best_format = None
+                for f in audio_formats:
+                    itag = str(f.get("itag", ""))
+                    container = str(f.get("container", ""))
+                    if itag == "140" or container == "m4a":
+                        best_format = f
+                        break
+                if not best_format and audio_formats:
+                    best_format = audio_formats[0]
+
+                if best_format and best_format.get("url"):
+                    audio_url = best_format["url"]
+                    audio_res = requests.get(audio_url, timeout=60, stream=True)
+                    if audio_res.status_code == 200:
+                        saved_path = os.path.join(temp_dir, "audio.m4a")
+                        with open(saved_path, "wb") as f:
+                            f.write(audio_res.content)
+                        print(f"[STEP 1b INVIDIOUS OK] Downloaded audio via {instance}")
+                        return {
+                            'success': True,
+                            'title': title,
+                            'description': description,
+                            'channel': author,
+                            'audio_path': saved_path
+                        }
+                    else:
+                        print(f"[STEP 1b INVIDIOUS FAIL] Download audio stream returned HTTP {audio_res.status_code}")
+                else:
+                    print(f"[STEP 1b INVIDIOUS FAIL] No audio formats found from {instance}")
+            else:
+                print(f"[STEP 1b INVIDIOUS FAIL] {instance} returned HTTP {res.status_code}")
+        except Exception as e:
+            print(f"[STEP 1b INVIDIOUS FAIL] {instance} error: {e}")
+
+    return {'success': False}
+
+
 @app.get("/youtube-full-analysis")
 def youtube_full_analysis(url: str):
     """
@@ -166,24 +287,41 @@ def youtube_full_analysis(url: str):
             print(f"[STEP 1a] oEmbed title extraction note: {e}")
 
         # ──────────────────────────────────────────
-        # STEP 1b: Try to download audio & extract info (may fail on datacenter IPs)
+        # STEP 1b: Download audio via Piped/Invidious (free, no cipher, proxied)
+        # Falls back to yt-dlp if all instances are down
         # ──────────────────────────────────────────
-        opts = _get_ydl_opts(temp_dir)
+        vid_id_match = re.search(r'(?:v=|/)([0-9A-Za-z_-]{11})', url)
+        video_id = vid_id_match.group(1) if vid_id_match else ''
+        
         download_success = False
-        try:
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                info = ydl.extract_info(url, download=True)
-                if info:
-                    if info.get('title'):
-                        title = info.get('title')
-                    if info.get('description'):
-                        description = info.get('description', '')[:1500]
-                    if info.get('channel') or info.get('uploader'):
-                        channel_name = info.get('channel', info.get('uploader', ''))
-                download_success = True
-                print(f"[STEP 1b OK] Downloaded audio for: {title}")
-        except Exception as e:
-            print(f"[STEP 1b SKIP] Audio download blocked (datacenter IP): {e}")
+        piped_result = _fetch_audio_via_piped_invidious(video_id, temp_dir)
+        if piped_result['success']:
+            download_success = True
+            if piped_result.get('title'):
+                title = piped_result['title']
+            if piped_result.get('description'):
+                description = piped_result['description'][:1500]
+            if piped_result.get('channel'):
+                channel_name = piped_result['channel']
+            print(f"[STEP 1b OK] Downloaded audio via Piped/Invidious for: {title}")
+        else:
+            # Fallback to yt-dlp if all Piped/Invidious instances failed
+            print(f"[STEP 1b] All Piped/Invidious instances failed. Trying yt-dlp fallback...")
+            opts = _get_ydl_opts(temp_dir)
+            try:
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    info = ydl.extract_info(url, download=True)
+                    if info:
+                        if info.get('title'):
+                            title = info.get('title')
+                        if info.get('description'):
+                            description = info.get('description', '')[:1500]
+                        if info.get('channel') or info.get('uploader'):
+                            channel_name = info.get('channel', info.get('uploader', ''))
+                    download_success = True
+                    print(f"[STEP 1b OK] Downloaded audio via yt-dlp fallback for: {title}")
+            except Exception as e:
+                print(f"[STEP 1b SKIP] yt-dlp fallback also failed: {e}")
 
         # Fallback HTML extraction for description and channel name if not already extracted
         if not description or not channel_name:
