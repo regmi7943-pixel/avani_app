@@ -137,6 +137,9 @@ export type Database = {
           ndvi: number | null
           ndwi: number | null
           planting_date: string | null
+          simulated_date: string | null
+          weeding_date: string | null
+          harvest_date: string | null
           soil_type: string | null
           status: string | null
           uniformity: number | null
@@ -159,6 +162,9 @@ export type Database = {
           ndvi?: number | null
           ndwi?: number | null
           planting_date?: string | null
+          simulated_date?: string | null
+          weeding_date?: string | null
+          harvest_date?: string | null
           soil_type?: string | null
           status?: string | null
           uniformity?: number | null
@@ -181,6 +187,9 @@ export type Database = {
           ndvi?: number | null
           ndwi?: number | null
           planting_date?: string | null
+          simulated_date?: string | null
+          weeding_date?: string | null
+          harvest_date?: string | null
           soil_type?: string | null
           status?: string | null
           uniformity?: number | null

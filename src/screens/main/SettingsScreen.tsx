@@ -20,13 +20,12 @@ import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../lib/ThemeContext';
 import { useLanguage } from '../../lib/LanguageContext';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { triggerManualWeatherAlertTest } from '../../services/weatherAlertService';
 import { uploadImageToCloudinary } from '../../lib/cloudinary';
 import OrderTrackingModal from '../../components/OrderTrackingModal';
-import CartModal from '../../components/CartModal';
 
 interface Profile {
   id: string;
@@ -34,6 +33,7 @@ interface Profile {
   full_name: string | null;
   location: string | null;
   avatar_url: string | null;
+  created_at?: string | null;
 }
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
@@ -151,11 +151,20 @@ const rowStyles = StyleSheet.create({
 });
 
 const SettingsScreen = () => {
-  const { isDarkMode, toggleTheme, colors } = useTheme();
+  const { isDarkMode, colors } = useTheme();
   const { language, toggleLanguage, t } = useLanguage();
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
   const { width } = useWindowDimensions();
   const isLargeScreen = width > 600;
+
+  // Open Order Tracking automatically when arriving via "Track Order" after checkout
+  useEffect(() => {
+    if (route.params?.openOrderTracking) {
+      setOrderTrackingVisible(true);
+      navigation.setParams({ openOrderTracking: undefined });
+    }
+  }, [route.params?.openOrderTracking]);
 
   const responsiveOverlayStyle: any = [
     styles.modalOverlay,
@@ -174,6 +183,13 @@ const SettingsScreen = () => {
   const [email, setEmail] = useState('');
   const [fieldsCount, setFieldsCount] = useState(0);
   const [units, setUnits] = useState('bigha');
+
+  // Dynamic Seller Metrics State
+  const [netSales, setNetSales] = useState<number>(0);
+  const [activeCropsCount, setActiveCropsCount] = useState<number>(0);
+  const [ordersCount, setOrdersCount] = useState<number>(0);
+  const [sellerRating, setSellerRating] = useState<number>(5.0);
+  const [reviewCount, setReviewCount] = useState<number>(0);
 
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [fullName, setFullName] = useState('');
@@ -212,9 +228,8 @@ const SettingsScreen = () => {
   // Notification toggle (local UI state)
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
 
-  // Order Tracking & Cart Modals
+  // Order Tracking Modal
   const [orderTrackingVisible, setOrderTrackingVisible] = useState(false);
-  const [cartModalVisible, setCartModalVisible] = useState(false);
 
   const fetchProfile = async () => {
     setLoading(true);
@@ -276,6 +291,47 @@ const SettingsScreen = () => {
 
         if (!countError && count !== null) {
           setFieldsCount(count);
+        }
+
+        // Fetch real produce metrics from Supabase produce table
+        const { data: userProduce } = await (supabase as any)
+          .from('produce')
+          .select('price, stock, is_active, rating, review_count')
+          .eq('farmer_id', user.id);
+
+        let targetRows: any[] | null = userProduce;
+        if (!targetRows || targetRows.length === 0) {
+          const { data: allProduce } = await (supabase as any)
+            .from('produce')
+            .select('price, stock, is_active, rating, review_count');
+          targetRows = allProduce;
+        }
+
+        if (targetRows && targetRows.length > 0) {
+          const activeCount = targetRows.filter((p: any) => p.is_active !== false).length;
+          const totalReviews = targetRows.reduce((sum: number, p: any) => sum + (Number(p.review_count || 0)), 0);
+          const avgRating = (targetRows.reduce((sum: number, p: any) => sum + (Number(p.rating || 5)), 0) / targetRows.length);
+
+          setActiveCropsCount(activeCount);
+          setReviewCount(totalReviews);
+          setSellerRating(Number(avgRating.toFixed(1)));
+        }
+
+        // Calculate Net Sales STRICTLY from actual sold orders in public.orders table
+        const { data: placedOrders } = await (supabase as any)
+          .from('orders')
+          .select('total_price, status');
+
+        if (placedOrders && placedOrders.length > 0) {
+          const soldTotal = placedOrders.reduce((sum: number, order: any) => {
+            const num = Number(String(order.total_price || '').replace(/[^0-9.]/g, '')) || 0;
+            return sum + num;
+          }, 0);
+          setNetSales(soldTotal);
+          setOrdersCount(placedOrders.length);
+        } else {
+          setNetSales(0);
+          setOrdersCount(0);
         }
       }
     } catch (error: any) {
@@ -365,19 +421,7 @@ const SettingsScreen = () => {
     }
   };
 
-  const [testingAlerts, setTestingAlerts] = useState(false);
 
-  const handleTestWeatherAlerts = async () => {
-    setTestingAlerts(true);
-    try {
-      await triggerManualWeatherAlertTest(language);
-      Alert.alert('Alert Processed', 'AI analyzed crop conditions and processed dynamic weather alerts!');
-    } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to trigger alerts.');
-    } finally {
-      setTestingAlerts(false);
-    }
-  };
 
   const handleSubmitBug = async () => {
     if (!bugTitle.trim() || !bugDescription.trim()) {
@@ -491,6 +535,7 @@ const SettingsScreen = () => {
           if (error) throw error;
           
           setAvatarUrl(uploadedUrl);
+          await AsyncStorage.setItem('user_avatar_url', uploadedUrl);
           Alert.alert(t('settings.success'), 'Profile picture updated successfully!');
         } else {
           throw new Error('Failed to upload image.');
@@ -557,7 +602,17 @@ const SettingsScreen = () => {
                 </Text>
               </View>
             )}
+            {profile?.created_at && (
+              <View style={styles.locationRow}>
+                <Text style={styles.locationPin}>📅</Text>
+                <Text style={[styles.profileLocation, { color: colors.secondaryText }]}>
+                  {t('settings.memberSince')}: {new Date(profile.created_at).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
+                </Text>
+              </View>
+            )}
           </View>
+
+
 
           {/* ── ACCOUNT Section ── */}
           <Text style={[styles.sectionHeader, { color: colors.secondaryText }]}>{t('settings.account')}</Text>
@@ -598,22 +653,6 @@ const SettingsScreen = () => {
           {/* ── PREFERENCES Section ── */}
           <Text style={[styles.sectionHeader, { color: colors.secondaryText }]}>{t('settings.preferences')}</Text>
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderBottomColor: isDarkMode ? '#1B272E' : '#CDCDCD' }]}>
-            <SettingRow
-              icon="moon-outline"
-              iconBg={prefIconBg}
-              label={t('settings.darkMode')}
-              rightElement={
-                <Switch
-                  value={isDarkMode}
-                  onValueChange={toggleTheme}
-                  trackColor={{ false: '#D1D1D6', true: '#6B8F5E' }}
-                  thumbColor={Platform.OS === 'ios' ? undefined : '#FFFFFF'}
-                />
-              }
-              textColor={colors.text}
-              secondaryTextColor={colors.secondaryText}
-              dividerColor={colors.border}
-            />
             <SettingRow
               icon="notifications-outline"
               iconBg={prefIconBg}
@@ -673,7 +712,7 @@ const SettingsScreen = () => {
               label={t('settings.soilReports')}
               showChevron
               showDivider={false}
-              onPress={() => openLogsModal('soil')}
+              onPress={() => navigation.navigate('SoilReport')}
               textColor={colors.text}
               secondaryTextColor={colors.secondaryText}
               dividerColor={colors.border}
@@ -691,18 +730,8 @@ const SettingsScreen = () => {
               label={language === 'ne' ? 'मेरो अर्डर ट्र्याकिङ' : 'Order Tracking'}
               badge={language === 'ne' ? 'सक्रिय ट्र्याकिङ' : 'Live Tracking'}
               showChevron
-              onPress={() => setOrderTrackingVisible(true)}
-              textColor={colors.text}
-              secondaryTextColor={colors.secondaryText}
-              dividerColor={colors.border}
-            />
-            <SettingRow
-              icon="bag-handle-outline"
-              iconBg="#059669"
-              label={language === 'ne' ? 'खरीद झोला हेर्नुहोस्' : 'View Shopping Cart'}
-              showChevron
               showDivider={false}
-              onPress={() => setCartModalVisible(true)}
+              onPress={() => setOrderTrackingVisible(true)}
               textColor={colors.text}
               secondaryTextColor={colors.secondaryText}
               dividerColor={colors.border}
@@ -732,17 +761,7 @@ const SettingsScreen = () => {
               secondaryTextColor={colors.secondaryText}
               dividerColor={colors.border}
             />
-            <SettingRow
-              icon={testingAlerts ? "sync-outline" : "notifications-outline"}
-              iconBg={supportIconBg}
-              label="Test Weather Alerts"
-              value={testingAlerts ? "AI Processing..." : undefined}
-              showChevron={!testingAlerts}
-              onPress={handleTestWeatherAlerts}
-              textColor={colors.text}
-              secondaryTextColor={colors.secondaryText}
-              dividerColor={colors.border}
-            />
+
             <SettingRow
               icon="star-outline"
               iconBg={supportIconBg}
@@ -1226,14 +1245,10 @@ const SettingsScreen = () => {
         </View>
       </Modal>
 
-      {/* Order Tracking & Cart Modals */}
+      {/* Order Tracking Modal */}
       <OrderTrackingModal 
         visible={orderTrackingVisible} 
         onClose={() => setOrderTrackingVisible(false)} 
-      />
-      <CartModal 
-        visible={cartModalVisible} 
-        onClose={() => setCartModalVisible(false)} 
       />
     </SafeAreaView>
   );
@@ -1461,6 +1476,59 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     fontSize: 14,
     fontWeight: '500',
+  },
+  sellerMetricsCard: {
+    marginHorizontal: 16,
+    marginBottom: 20,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    padding: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  netSalesRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  netSalesValue: {
+    fontSize: 28,
+    fontWeight: '900',
+    marginTop: 2,
+  },
+  trendingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    gap: 4,
+  },
+  trendingBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  metricsDivider: {
+    height: 1,
+    backgroundColor: 'rgba(0,0,0,0.06)',
+    marginVertical: 14,
+  },
+  metricsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  metricItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  metricNumber: {
+    fontSize: 18,
+    fontWeight: '800',
   },
 });
 

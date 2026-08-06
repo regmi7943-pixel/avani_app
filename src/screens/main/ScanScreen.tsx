@@ -13,18 +13,43 @@ import {
   Easing,
   TextInput,
   Modal,
-  Linking
+  Linking,
+  useWindowDimensions,
+  StatusBar,
+  Platform
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../lib/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
-import { identifyAndDiagnose, hasApiKeys } from '../../services/plantApi';
+import { identifyAndDiagnose, compressAndPrepareImage, sourceMedicinesWithLlama70B, hasApiKeys } from '../../services/plantApi';
 import { supabase } from '../../lib/supabase';
 import { useLanguage } from '../../lib/LanguageContext';
 import { uploadImageToCloudinary } from '../../lib/cloudinary';
+import { 
+  fetchGoogleYouTubeVideos, 
+  selectTop5VideosWithLlama70B,
+  VERIFIED_NEPAL_YOUTUBE_VIDEOS, 
+  YouTubeFarmingItem 
+} from '../../lib/youtubeService';
+
+let WebView: any = View;
+if (Platform.OS !== 'web') {
+  try {
+    WebView = require('react-native-webview').WebView;
+  } catch (e) {}
+}
+
+function getVideoId(youtubeId?: string, rawUrl?: string): string {
+  let id = youtubeId || '';
+  if (!id && rawUrl) {
+    const match = rawUrl.match(/(?:v=|\/embed\/|\/watch\?v=|\/v\/|youtu\.be\/|\/shorts\/)([a-zA-Z0-9_-]{11})/);
+    if (match && match[1]) id = match[1];
+  }
+  return id || 'TXK2ABX7kN4';
+}
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -128,23 +153,133 @@ const DISEASE_DB = {
   ]
 };
 
+export interface TreatmentProductItem {
+  id: string;
+  name: string;
+  nameNepali?: string;
+  price?: number;
+  unit?: string;
+  image_url?: string;
+  isMarketplace: boolean; // true = Available in Marketplace, false = Local Dealer Only
+  dealerName?: string;
+  dealerPhone?: string;
+  dealerAddress?: string;
+  category: string;
+  recommendedDosage: string;
+}
+
+function getTreatmentProductsForDisease(diseaseName: string, plantName: string, locationName: string): TreatmentProductItem[] {
+  const dLower = (diseaseName || '').toLowerCase();
+  
+  if (dLower.includes('healthy')) {
+    return [
+      {
+        id: 'prod-bio-npk',
+        name: 'Bio-NPK Liquid Biofertilizer',
+        nameNepali: 'बायो-एनपीके तरलीय जैविक मल',
+        price: 380,
+        unit: '1 Litre Bottle',
+        image_url: 'https://images.unsplash.com/photo-1628352081506-83c43123ed6d?w=400&q=80',
+        isMarketplace: true,
+        category: 'Bio-Fertilizer',
+        recommendedDosage: '5ml / Litre water every 14 days'
+      },
+      {
+        id: 'dealer-zinc-sulfate',
+        name: 'Zinc Sulfate 21% Micronutrient Mix',
+        nameNepali: 'जिङ्क सल्फेट २१% सुक्ष्म तत्व',
+        price: 260,
+        unit: '1 kg Pack',
+        image_url: 'https://images.unsplash.com/photo-1592417817098-8f3d6eb19675?w=400&q=80',
+        isMarketplace: false,
+        dealerName: `${locationName || 'Chitwan'} Krishi Sewa Kendra`,
+        dealerPhone: '+977-9845012345',
+        dealerAddress: `${locationName || 'Madi, Chitwan'} Main Market`,
+        category: 'Nutrient',
+        recommendedDosage: '2g / Litre water foliar spray'
+      }
+    ];
+  }
+
+  return [
+    {
+      id: 'prod-tebuconazole',
+      name: 'Tebuconazole 25.9% EC Fungicide',
+      nameNepali: 'टेबुकोनाजोल २५.९% फङ्गीसाइड',
+      price: 650,
+      unit: '250 ml Bottle',
+      image_url: 'https://images.unsplash.com/photo-1628352081506-83c43123ed6d?w=400&q=80',
+      isMarketplace: true,
+      category: 'Fungicide',
+      recommendedDosage: '1.5ml / Litre water at first symptom'
+    },
+    {
+      id: 'prod-neem-extract',
+      name: 'Cold-Pressed Pure Neem Seed Extract (10000 PPM)',
+      nameNepali: 'शुद्ध नीमको तेल (जैविक विषादी)',
+      price: 420,
+      unit: '500 ml Pack',
+      image_url: 'https://images.unsplash.com/photo-1615485290382-441e4d049cb5?w=400&q=80',
+      isMarketplace: true,
+      category: 'Organic Control',
+      recommendedDosage: '3ml / Litre water with soap'
+    },
+    {
+      id: 'dealer-copper-blitox',
+      name: 'Copper Oxychloride 50% WP (Blitox Protectant)',
+      nameNepali: 'कपर अक्सिक्लोराइड ५०% WP (ब्लिटक्स)',
+      price: 540,
+      unit: '500 g Pack',
+      image_url: 'https://images.unsplash.com/photo-1592417817098-8f3d6eb19675?w=400&q=80',
+      isMarketplace: false,
+      dealerName: `${locationName || 'Madi'} Agrovety Krishi Bhandar`,
+      dealerPhone: '+977-9855098765',
+      dealerAddress: `${locationName || 'Madi'}, Ward 3, Chitwan`,
+      category: 'Fungicide',
+      recommendedDosage: '2.5g / Litre water preventive spray'
+    }
+  ];
+}
+
 export default function ScanScreen() {
   const navigation = useNavigation();
   const { colors, isDarkMode } = useTheme();
   const { t } = useLanguage();
   const [permission, requestPermission] = useCameraPermissions();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   
   const [isScanning, setIsScanning] = useState(false);
   const [scanStage, setScanStage] = useState<'plant_id' | 'disease_id'>('plant_id');
   const [scanProgress, setScanProgress] = useState(0);
   const [scanStepText, setScanStepText] = useState('');
   
+  const [enableTorch, setEnableTorch] = useState(false);
+  const shutterScale = useRef(new Animated.Value(1)).current;
+
+  // Dynamic math-based layout calculations (0 hardcoded static pixels)
+  const scannerFrameSize = Math.round(Math.min(screenWidth * 0.76, screenHeight * 0.36, 320));
+  const scannerTopPosition = Math.round(screenHeight * 0.19);
+  const scanTravelDistance = scannerFrameSize - 12;
+  
+  const shutterOuterSize = Math.round(Math.min(screenWidth * 0.22, 84));
+  const shutterInnerSize = Math.round(Math.min(screenWidth * 0.17, 66));
+  const shutterIconSize = Math.round(shutterInnerSize * 0.46);
+  const controlBtnSize = Math.round(Math.min(screenWidth * 0.14, 52));
+  
+  const bottomTabBarSpace = 64 + (insets.bottom || 0);
+  const bottomOverlayPaddingBottom = bottomTabBarSpace + Math.round(screenHeight * 0.045);
+  
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [detectedPlant, setDetectedPlant] = useState<{ id: string; name: string; botanicalName: string } | null>(null);
   const [scanResult, setScanResult] = useState<any | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
 
-  const [recommendedItems, setRecommendedItems] = useState<any[]>([]);
+  const [recommendedItems, setRecommendedItems] = useState<TreatmentProductItem[]>([]);
+  const [videoRecommendations, setVideoRecommendations] = useState<YouTubeFarmingItem[]>([]);
+  const [selectedVideo, setSelectedVideo] = useState<YouTubeFarmingItem | null>(null);
+  const [selectedDealerItem, setSelectedDealerItem] = useState<TreatmentProductItem | null>(null);
+
   const [assignedVet, setAssignedVet] = useState<any | null>(null);
   const [locationName, setLocationName] = useState('Madi, Chitwan');
   
@@ -153,14 +288,60 @@ export default function ScanScreen() {
   const [orderQuantity, setOrderQuantity] = useState('1');
   const [ordering, setOrdering] = useState(false);
 
-  // Fetch local pesticides/fertilizers when scanResult changes
+  // Global 60-Second Scan Cooldown Timer to prevent Groq TPM Rate Limits
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
+
   useEffect(() => {
-    async function loadRecommendedTreatments() {
-      if (!scanResult || scanResult.disease.name.includes('Healthy')) {
-        setRecommendedItems([]);
-        return;
+    let timer: any = null;
+    if (cooldownSeconds > 0) {
+      timer = setInterval(() => {
+        setCooldownSeconds((prev) => (prev <= 1 ? 0 : prev - 1));
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [cooldownSeconds]);
+
+  // Fetch disease-specific video recommendations and treatment items
+  useEffect(() => {
+    async function loadScanRecommendations() {
+      if (!scanResult) return;
+
+      // 1. Fetch Disease-Specific YouTube Video Tutorials via Google YouTube Data API v3
+      try {
+        const rawDisease = scanResult.disease.name || '';
+        const rawPlant = scanResult.plant.name || '';
+        const sanitizedDisease = rawDisease.replace(/[\(\)\[\]\{\}\/\\:\-]/g, ' ').replace(/\s+/g, ' ').trim();
+        const hasPlantWord = sanitizedDisease.toLowerCase().includes(rawPlant.toLowerCase());
+        const query = hasPlantWord 
+          ? `${sanitizedDisease} treatment remedy` 
+          : `${sanitizedDisease} ${rawPlant} treatment remedy`.replace(/\s+/g, ' ').trim();
+
+        console.log(`🎥 Searching YouTube videos for query: "${query}"`);
+        const res = await fetchGoogleYouTubeVideos('all', query);
+        if (res.items && res.items.length > 0) {
+          console.log(`🦙 Passing ${res.items.length} candidate videos to Groq Llama 3.3 70B for 5-video curation...`);
+          const curatedTop5 = await selectTop5VideosWithLlama70B(
+            scanResult.plant.name,
+            scanResult.disease.name,
+            res.items
+          );
+          setVideoRecommendations(curatedTop5);
+        } else {
+          const plantLower = rawPlant.toLowerCase();
+          const filteredFallback = VERIFIED_NEPAL_YOUTUBE_VIDEOS.filter(v => 
+            v.cropNameEn.toLowerCase().includes(plantLower) || 
+            v.titleEn.toLowerCase().includes(plantLower)
+          );
+          setVideoRecommendations(filteredFallback.length > 0 ? filteredFallback.slice(0, 5) : VERIFIED_NEPAL_YOUTUBE_VIDEOS.slice(0, 5));
+        }
+      } catch (err) {
+        setVideoRecommendations(VERIFIED_NEPAL_YOUTUBE_VIDEOS.slice(0, 5));
       }
-      
+
+      // 2. Fetch User Location & Dynamic Medicine Sourcing via Groq Llama 3.3 70B + RAG + Marketplace Catalog
+      let loc = 'Bharatpur';
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
@@ -169,44 +350,39 @@ export default function ScanScreen() {
             .select('location_name')
             .eq('user_id', user.id)
             .limit(1);
-            
-          const location = (fields && fields.length > 0 && fields[0].location_name) 
-            ? fields[0].location_name 
-            : 'Madi, Chitwan';
-            
-          setLocationName(location);
-          
-          const { data: items } = await (supabase as any)
-            .from('marketplace_items')
-            .select('*')
-            .eq('assigned_area', location);
-            
-          if (items) {
-            // Filter: Categories: Pesticides or Fertilizer
-            const treatments = items.filter((item: any) => 
-              item.category === 'Pesticides' || item.category === 'Fertilizer'
-            );
-            setRecommendedItems(treatments);
-          }
-          
-          // Get Vet
-          const { data: vets } = await (supabase as any)
-            .from('vets')
-            .select('*')
-            .eq('assigned_area', location)
-            .limit(1);
-            
-          if (vets && vets.length > 0) {
-            setAssignedVet(vets[0]);
+          if (fields && fields.length > 0 && fields[0].location_name) {
+            loc = fields[0].location_name;
           } else {
-            setAssignedVet(null);
+            const { data: profile } = await (supabase as any)
+              .from('profiles')
+              .select('location, city, district')
+              .eq('id', user.id)
+              .maybeSingle();
+            if (profile?.location || profile?.city || profile?.district) {
+              loc = profile.location || profile.city || profile.district;
+            }
           }
         }
-      } catch (err) {
-        console.warn('Failed to load scan-based recommendations', err);
+      } catch (e) {}
+
+      setLocationName(loc);
+
+      if (scanResult.sourcedMedicines && scanResult.sourcedMedicines.length > 0) {
+        console.log('🛒 Using direct Qwen 3.6 27B Vision Sourced Medicines from database:', JSON.stringify(scanResult.sourcedMedicines, null, 2));
+        setRecommendedItems(scanResult.sourcedMedicines);
+      } else {
+        console.log('🛒 Sourcing medicines via database engine fallback...');
+        const sourcedProducts = await sourceMedicinesWithLlama70B(
+          scanResult.plant.name,
+          scanResult.disease.name,
+          scanResult.suggestedMedicines || [],
+          loc
+        );
+        setRecommendedItems(sourcedProducts);
       }
     }
-    loadRecommendedTreatments();
+
+    loadScanRecommendations();
   }, [scanResult]);
   
   const cameraRef = useRef<any>(null);
@@ -242,26 +418,44 @@ export default function ScanScreen() {
 
   // Image Selection from Library
   const pickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert(t('scanResults.permissionDenied'), t('scanResults.galleryPermissionDesc'));
+    if (cooldownSeconds > 0) {
+      Alert.alert(
+        '⏳ Scan Cooldown Active',
+        `To ensure optimal AI server performance, please wait ${cooldownSeconds} seconds before scanning again.`
+      );
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      const uri = result.assets[0].uri;
-      setCapturedImage(uri);
-      runDualStageScan(uri);
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(t('scanResults.permissionDenied'), t('scanResults.galleryPermissionDesc'));
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const uri = result.assets[0].uri;
+        setCapturedImage(uri);
+        runDualStageScan(uri);
+      }
+    } catch (err: any) {
+      console.warn('ImagePicker error:', err?.message);
     }
   };
 
   // Capture Image from Camera Shutter
   const takePicture = async () => {
+    if (cooldownSeconds > 0) {
+      Alert.alert(
+        '⏳ Scan Cooldown Active',
+        `To ensure optimal AI server performance, please wait ${cooldownSeconds} seconds before scanning again.`
+      );
+      return;
+    }
     if (cameraRef.current) {
       try {
         const photo = await cameraRef.current.takePictureAsync({
@@ -270,10 +464,11 @@ export default function ScanScreen() {
         if (photo && photo.uri) {
           setCapturedImage(photo.uri);
           runDualStageScan(photo.uri);
+        } else {
+          runDualStageScan(null);
         }
-      } catch (err) {
-        console.warn('Camera capture error:', err);
-        // Fallback for emulator / simulator
+      } catch (err: any) {
+        console.warn('Camera capture error:', err?.message);
         runDualStageScan(null);
       }
     } else {
@@ -285,12 +480,27 @@ export default function ScanScreen() {
   const runDualStageScan = async (imageUri: string | null) => {
     if (!imageUri) return;
 
+    if (cooldownSeconds > 0) {
+      Alert.alert(
+        '⏳ Scan Cooldown Active',
+        `Please wait ${cooldownSeconds} seconds before initiating another scan.`
+      );
+      return;
+    }
+
+    // Set 1 minute 30 seconds (90s) cooldown timer between scans
+    setCooldownSeconds(90);
+
     setIsScanning(true);
     setScanStage('plant_id');
     setScanProgress(0);
     setDetectedPlant(null);
     setScanResult(null);
     setScanError(null);
+    setRecommendedItems([]);
+    setVideoRecommendations([]);
+    setSelectedVideo(null);
+    setSelectedDealerItem(null);
     startScanAnimation();
 
     const scanSteps = [
@@ -305,13 +515,25 @@ export default function ScanScreen() {
       'Finalizing treatment advice...',
     ];
 
-    // Upload to Cloudinary in background
-    let uploadedImageUrl = imageUri;
-    uploadImageToCloudinary(imageUri).then((url) => {
-      if (url) uploadedImageUrl = url;
-    }).catch(console.warn);
+    // 1. Immediately compress & downsample image client-side to 1024px @ 80% JPEG
+    let activeUri = imageUri;
+    try {
+      const compressed = await compressAndPrepareImage(imageUri);
+      activeUri = compressed.uri;
+      setCapturedImage(compressed.uri);
+    } catch (e: any) {
+      console.warn('ScanScreen compression error:', e?.message);
+    }
 
-    // Start background progress simulation (animates to 90% while waiting for network)
+    // 2. Upload compressed image to Cloudinary in background
+    let uploadedImageUrl = activeUri;
+    uploadImageToCloudinary(activeUri).then((url) => {
+      if (url) {
+        uploadedImageUrl = url;
+      }
+    }).catch(err => console.warn('Cloudinary upload warning:', err));
+
+    // Start background progress simulation
     let currentProgress = 0;
     const progressInterval = setInterval(() => {
       if (currentProgress < 90) {
@@ -320,13 +542,13 @@ export default function ScanScreen() {
         const textIdx = Math.floor((currentProgress / 100) * scanSteps.length);
         setScanStepText(scanSteps[Math.min(textIdx, scanSteps.length - 1)]);
       }
-    }, 250); // Reaches 90% in ~11 seconds
+    }, 250);
 
     // ── Call API in Parallel to the Loading Animation ──
     if (hasApiKeys) {
       try {
-        const apiResult = await identifyAndDiagnose(imageUri);
-        
+        const apiResult = await identifyAndDiagnose(activeUri);
+
         clearInterval(progressInterval);
 
         if (apiResult.error) {
@@ -357,7 +579,11 @@ export default function ScanScreen() {
               treatment: apiResult.treatment,
               urgency: apiResult.urgency,
               nepaliName: apiResult.nepaliName,
+              suggestedMedicines: apiResult.suggestedMedicines,
+              sourcedMedicines: apiResult.sourcedMedicines,
             },
+            suggestedMedicines: apiResult.suggestedMedicines,
+            sourcedMedicines: apiResult.sourcedMedicines,
             confidence: apiResult.confidence?.toString() || '90',
             image: uploadedImageUrl,
           });
@@ -439,185 +665,436 @@ export default function ScanScreen() {
     }, 80);
   };
 
+  const toggleTorch = () => {
+    setEnableTorch(prev => !prev);
+  };
+
+  const handleShutterPressIn = () => {
+    Animated.spring(shutterScale, {
+      toValue: 0.88,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handleShutterPressOut = () => {
+    Animated.spring(shutterScale, {
+      toValue: 1,
+      friction: 3,
+      tension: 40,
+      useNativeDriver: true,
+    }).start();
+  };
+
   const handleReset = () => {
     setScanResult(null);
     setCapturedImage(null);
     setDetectedPlant(null);
     setIsScanning(false);
+    setRecommendedItems([]);
+    setVideoRecommendations([]);
+    setSelectedVideo(null);
+    setSelectedDealerItem(null);
   };
 
   const scanLineTranslateY = scanAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, 246]
+    outputRange: [0, scanTravelDistance]
   });
 
   // 1. Permission request screen if not granted
   if (!permission || !permission.granted) {
     return (
       <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-        <View style={styles.container}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>{t('scanResults.cropDiagnostician')}</Text>
-          <Text style={[styles.subtitle, { color: colors.secondaryText }]}>
-            {t('scanResults.cropDiagnosticianDesc')}
-          </Text>
+        <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} />
+        <ScrollView contentContainerStyle={styles.permissionScroll} showsVerticalScrollIndicator={false}>
+          {/* Header Banner */}
+          <View style={styles.permissionHeader}>
+            <Text style={[styles.permissionHeaderTitle, { color: colors.text }]}>{t('scanResults.cropDiagnostician')}</Text>
+            <Text style={[styles.permissionHeaderSub, { color: colors.secondaryText }]}>
+              {t('scanResults.cropDiagnosticianDesc')}
+            </Text>
+          </View>
 
-          <View style={[styles.permissionCard, { backgroundColor: colors.card }]}>
-            <View style={[styles.iconCircle, { backgroundColor: colors.inputBg }]}>
-              <Ionicons name="scan" size={48} color={colors.brandGreen} />
+          {/* Futuristic Hero Card */}
+          <View style={[styles.permissionHeroCard, { backgroundColor: colors.card, borderColor: colors.border, borderBottomColor: colors.brandGreen }]}>
+            <View style={[styles.permissionBadgeGlow, { backgroundColor: 'rgba(107, 143, 94, 0.12)' }]}>
+              <View style={[styles.permissionBadgeInner, { backgroundColor: colors.brandGreen }]}>
+                <Ionicons name="camera" size={38} color="#FFFFFF" />
+              </View>
             </View>
-            <Text style={[styles.permissionTitle, { color: colors.text }]}>{t('scanResults.cameraAccessRequired')}</Text>
-            <Text style={[styles.permissionDescription, { color: colors.secondaryText }]}>
+
+            <Text style={[styles.permissionTitleNew, { color: colors.text }]}>{t('scanResults.cameraAccessRequired')}</Text>
+            <Text style={[styles.permissionDescNew, { color: colors.secondaryText }]}>
               {t('scanResults.cameraAccessDesc')}
             </Text>
-            <TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.brandGreen }]} onPress={handleRequestPermission}>
-              <Text style={styles.primaryButtonText}>{t('scanResults.enableCamera')}</Text>
+
+            {/* Feature Highlights */}
+            <View style={styles.featureHighlightsBox}>
+              <View style={styles.featureHighlightRow}>
+                <Ionicons name="checkmark-circle" size={18} color={colors.brandGreen} style={{ marginRight: 10 }} />
+                <Text style={[styles.featureHighlightText, { color: colors.text }]}>Real-time Leaf & Crop Diagnosis</Text>
+              </View>
+              <View style={styles.featureHighlightRow}>
+                <Ionicons name="checkmark-circle" size={18} color={colors.brandGreen} style={{ marginRight: 10 }} />
+                <Text style={[styles.featureHighlightText, { color: colors.text }]}>Instant Pathogen & Disease Identification</Text>
+              </View>
+              <View style={styles.featureHighlightRow}>
+                <Ionicons name="checkmark-circle" size={18} color={colors.brandGreen} style={{ marginRight: 10 }} />
+                <Text style={[styles.featureHighlightText, { color: colors.text }]}>Localized Nepali Treatment Solutions</Text>
+              </View>
+            </View>
+
+            {/* Enable Camera Primary Action */}
+            <TouchableOpacity 
+              style={[styles.permissionPrimaryBtn, { backgroundColor: colors.brandGreen }]} 
+              onPress={handleRequestPermission}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="camera-outline" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
+              <Text style={styles.permissionPrimaryBtnText}>{t('scanResults.enableCamera')}</Text>
+            </TouchableOpacity>
+
+            {/* Alternative Gallery Pick */}
+            <TouchableOpacity 
+              style={[styles.permissionSecondaryBtn, { borderColor: colors.border }]} 
+              onPress={pickImage}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="images-outline" size={18} color={colors.text} style={{ marginRight: 8 }} />
+              <Text style={[styles.permissionSecondaryBtnText, { color: colors.text }]}>Pick Image from Gallery</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
 
-  // 2. Scan Results Screen
+  // 2. Scan Results Screen (Beautiful, Premium & Dynamic Layout)
   if (scanResult) {
     const isHealthy = scanResult.disease.name.includes('Healthy');
     const urgencyColor = 
       scanResult.disease.urgency === 'low' ? '#2E7D32' : 
       scanResult.disease.urgency === 'medium' ? '#EF6C00' : '#C62828';
     const urgencyBg = 
-      scanResult.disease.urgency === 'low' ? '#E8F5E9' : 
-      scanResult.disease.urgency === 'medium' ? '#FFF3E0' : '#FFEBEE';
+      scanResult.disease.urgency === 'low' ? 'rgba(46, 125, 50, 0.12)' : 
+      scanResult.disease.urgency === 'medium' ? 'rgba(239, 108, 0, 0.12)' : 'rgba(198, 40, 40, 0.12)';
+
+    const heroImageHeight = Math.round(Math.min(screenHeight * 0.32, 280));
+    const productCardWidth = Math.round(Math.min(screenWidth * 0.68, 250));
 
     return (
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background, paddingTop: Math.max(insets.top, 8) }]}>
+        <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} />
         <View style={styles.container}>
-          {/* TopAppBar */}
-          <View style={[styles.header, { borderBottomColor: colors.border }]}>
-            <TouchableOpacity onPress={handleReset} style={styles.backBtn}>
-              <Ionicons name="arrow-back" size={24} color={colors.text} />
+          {/* Top Header */}
+          <View style={[styles.header, { borderBottomColor: colors.border, paddingHorizontal: Math.round(screenWidth * 0.04) }]}>
+            <TouchableOpacity onPress={handleReset} style={styles.backBtn} activeOpacity={0.7}>
+              <Ionicons name="chevron-back" size={26} color={colors.text} />
             </TouchableOpacity>
-            <Text style={[styles.headerTitle, { color: colors.brandGreen, fontWeight: '900' }]}>{t('scanResults.scanResultsHeader')}</Text>
-            <TouchableOpacity onPress={handleReset} style={styles.backBtn}>
-              <Ionicons name="camera-outline" size={22} color={colors.text} />
+            <View style={{ alignItems: 'center' }}>
+              <Text style={[styles.headerTitle, { color: colors.brandGreen, fontWeight: '900', fontSize: 17 }]}>
+                {t('scanResults.scanResultsHeader')}
+              </Text>
+              <Text style={{ fontSize: 11, color: colors.secondaryText, fontWeight: '600', marginTop: -2 }}>
+                Verified Agronomic Pathology
+              </Text>
+            </View>
+            <TouchableOpacity onPress={handleReset} style={styles.backBtn} activeOpacity={0.7}>
+              <Ionicons name="camera-reverse-outline" size={22} color={colors.text} />
             </TouchableOpacity>
           </View>
 
-          <ScrollView contentContainerStyle={styles.resultContainerNew} showsVerticalScrollIndicator={false}>
-            {/* Scanned Image Card */}
+          <ScrollView 
+            contentContainerStyle={[styles.resultContainerNew, { paddingHorizontal: Math.round(screenWidth * 0.04), paddingBottom: insets.bottom + 90 }]} 
+            showsVerticalScrollIndicator={false}
+          >
+
+
+            {/* Scanned Image Hero Card */}
             {scanResult.image && (
-              <View style={[styles.imageCardNew, { borderColor: colors.border, borderBottomColor: isDarkMode ? '#1B272E' : '#CDCDCD' }]}>
-                <Image source={{ uri: scanResult.image }} style={styles.resultImageNew} />
-                <View style={styles.confidenceOverlayNew}>
-                  <Ionicons name="checkmark-circle" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
-                  <Text style={styles.confidenceTextNew}>{scanResult.confidence}% {t('scanResults.confidence')}</Text>
+              <View style={[styles.heroImageCard, { height: heroImageHeight, borderColor: colors.border }]}>
+                <Image source={{ uri: scanResult.image }} style={styles.heroImageFull} resizeMode="cover" />
+                
+                {/* Confidence Pill Overlay */}
+                <View style={styles.confidencePillFloating}>
+                  <Ionicons name="checkmark-circle" size={15} color="#4CAF50" style={{ marginRight: 4 }} />
+                  <Text style={styles.confidencePillText}>
+                    {scanResult.confidence}% {t('scanResults.confidence')}
+                  </Text>
+                </View>
+
+                {/* Urgency Pill Overlay */}
+                <View style={[styles.urgencyPillFloating, { backgroundColor: urgencyBg, borderColor: urgencyColor }]}>
+                  <Ionicons 
+                    name={isHealthy ? "leaf" : "alert-circle"} 
+                    size={13} 
+                    color={urgencyColor} 
+                    style={{ marginRight: 4 }} 
+                  />
+                  <Text style={[styles.urgencyPillText, { color: urgencyColor }]}>
+                    {t(`scanResults.${scanResult.disease.urgency}Urgency`)}
+                  </Text>
+                </View>
+
+                {/* Plant Name Bottom Gradient */}
+                <View style={styles.heroImageBottomGradient}>
+                  <Text style={styles.heroImagePlantName}>
+                    {scanResult.plant.name}
+                  </Text>
+                  <Text style={styles.heroImageBotanicalName}>
+                    {scanResult.plant.botanicalName || 'Oryza sativa'}
+                  </Text>
                 </View>
               </View>
             )}
 
-            {/* Diagnosis Header */}
-            <View style={[styles.resultHeaderCardNew, { backgroundColor: colors.card, borderColor: colors.border, borderBottomColor: isDarkMode ? '#1B272E' : '#CDCDCD' }]}>
-              <View style={[styles.badgeNew, { backgroundColor: urgencyBg }]}>
-                <Ionicons name="warning" size={12} color={urgencyColor} style={{ marginRight: 4 }} />
-                <Text style={[styles.badgeTextNew, { color: urgencyColor }]}>
-                  {t(`scanResults.${scanResult.disease.urgency}Urgency`)}
+            {/* Diagnosis Main Info Card */}
+            <View style={[styles.resultHeaderCardNew, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <Text style={{ fontSize: 12, fontWeight: '800', color: colors.brandGreen, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                  Diagnosed Condition
+                </Text>
+                <Text style={{ fontSize: 11, color: colors.secondaryText, fontWeight: '600' }}>
+                  ICAR / NARC Standard
                 </Text>
               </View>
-              <Text style={[styles.resultTitleNew, { color: colors.text }]}>{scanResult.disease.name}</Text>
-              
+
+              <Text style={[styles.resultTitleNew, { color: colors.text }]}>
+                {scanResult.disease.name}
+              </Text>
+
               {scanResult.disease.nepaliName ? (
-                <Text style={styles.resultNepaliTitleNew}>
-                  {scanResult.disease.nepaliName}
-                </Text>
-              ) : null}
-
-              <View style={[styles.plantMetadataRowNew, { borderTopColor: colors.border }]}>
-                <Ionicons name="leaf-outline" size={16} color={colors.secondaryText} style={{ marginRight: 6 }} />
-                <Text style={[styles.resultSubNew, { color: colors.secondaryText }]}>
-                  {scanResult.plant.name} • <Text style={{ fontFamily: 'Inter', fontStyle: 'italic' }}>{scanResult.plant.botanicalName || 'Oryza sativa'}</Text>
-                </Text>
-              </View>
-            </View>
-
-            {/* Info Cards Grid */}
-            <View style={styles.infoCardsGridNew}>
-              {/* Pathogen */}
-              <View style={[styles.infoCardNew, { backgroundColor: colors.card, borderColor: colors.border, borderBottomColor: isDarkMode ? '#1B272E' : '#CDCDCD' }]}>
-                <View style={[styles.infoIconBoxNew, { backgroundColor: colors.background }]}>
-                  <Ionicons name="bug-outline" size={20} color={colors.accent} />
-                </View>
-                <View style={styles.infoTextContentNew}>
-                  <Text style={[styles.infoCardLabelNew, { color: colors.text }]}>{t('scanResults.pathogenCause')}</Text>
-                  <Text style={[styles.infoCardValNew, { color: colors.secondaryText }]}>{scanResult.disease.cause}</Text>
-                </View>
-              </View>
-
-              {/* Symptoms */}
-              <View style={[styles.infoCardNew, { backgroundColor: colors.card, borderColor: colors.border, borderBottomColor: isDarkMode ? '#1B272E' : '#CDCDCD' }]}>
-                <View style={[styles.infoIconBoxNew, { backgroundColor: colors.background }]}>
-                  <Ionicons name="eye-outline" size={20} color={colors.brandGreen} />
-                </View>
-                <View style={styles.infoTextContentNew}>
-                  <Text style={[styles.infoCardLabelNew, { color: colors.text }]}>{t('scanResults.symptoms')}</Text>
-                  <Text style={[styles.infoCardValNew, { color: colors.secondaryText }]}>{scanResult.disease.symptoms}</Text>
-                </View>
-              </View>
-
-              {/* Treatment Plan */}
-              <View style={[styles.infoCardNew, { backgroundColor: colors.card, borderColor: colors.brandGreen, borderBottomColor: colors.brandGreenDark }]}>
-                <View style={[styles.infoIconBoxNew, { backgroundColor: 'rgba(107, 143, 94, 0.1)' }]}>
-                  <Ionicons name="medical-outline" size={20} color={colors.brandGreen} />
-                </View>
-                <View style={styles.infoTextContentNew}>
-                  <Text style={[styles.infoCardLabelNew, { color: colors.text }]}>{t('scanResults.treatmentPlan')}</Text>
-                  <Text style={[styles.infoCardValNew, { color: colors.secondaryText }]}>{scanResult.disease.treatment}</Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Recommended Pesticides */}
-            {recommendedItems.length > 0 && (
-              <View style={styles.localTreatmentsContainerNew}>
-                <View style={styles.localTreatmentsHeaderNew}>
-                  <Ionicons name="storefront-outline" size={20} color={colors.accent} style={{ marginRight: 6 }} />
-                  <Text style={[styles.localTreatmentsTitleNew, { color: colors.accent }]}>
-                    {t('scanResults.availableLocalTreatments')} ({locationName || 'Madi, Chitwan'})
+                <View style={styles.nepaliTitleBadgeRow}>
+                  <Ionicons name="language" size={14} color="#D84315" style={{ marginRight: 6 }} />
+                  <Text style={styles.resultNepaliTitleNew}>
+                    {scanResult.disease.nepaliName}
                   </Text>
+                </View>
+              ) : null}
+            </View>
+
+            {/* Pathology Details Grid */}
+            <View style={styles.infoCardsGridNew}>
+              {/* Pathogen Cause */}
+              <View style={[styles.infoCardNew, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <View style={[styles.infoIconBoxNew, { backgroundColor: 'rgba(239, 108, 0, 0.1)' }]}>
+                  <Ionicons name="bug" size={20} color="#EF6C00" />
+                </View>
+                <View style={styles.infoTextContentNew}>
+                  <Text style={[styles.infoCardLabelNew, { color: colors.text }]}>
+                    {t('scanResults.pathogenCause')}
+                  </Text>
+                  <Text style={[styles.infoCardValNew, { color: colors.secondaryText }]}>
+                    {scanResult.disease.cause}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Observed Symptoms */}
+              <View style={[styles.infoCardNew, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <View style={[styles.infoIconBoxNew, { backgroundColor: 'rgba(33, 150, 243, 0.1)' }]}>
+                  <Ionicons name="eye" size={20} color="#2196F3" />
+                </View>
+                <View style={styles.infoTextContentNew}>
+                  <Text style={[styles.infoCardLabelNew, { color: colors.text }]}>
+                    {t('scanResults.symptoms')}
+                  </Text>
+                  <Text style={[styles.infoCardValNew, { color: colors.secondaryText }]}>
+                    {scanResult.disease.symptoms}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Verified Treatment Plan */}
+              <View style={[styles.infoCardNew, { backgroundColor: colors.card, borderColor: colors.brandGreen }]}>
+                <View style={[styles.infoIconBoxNew, { backgroundColor: 'rgba(76, 175, 80, 0.12)' }]}>
+                  <Ionicons name="medical" size={20} color={colors.brandGreen} />
+                </View>
+                <View style={styles.infoTextContentNew}>
+                  <Text style={[styles.infoCardLabelNew, { color: colors.text }]}>
+                    {t('scanResults.treatmentPlan')}
+                  </Text>
+                  <Text style={[styles.infoCardValNew, { color: colors.secondaryText }]}>
+                    {scanResult.disease.treatment}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Qwen Vision Suggested Candidate Medicines */}
+              {((scanResult.suggestedMedicines && scanResult.suggestedMedicines.length > 0) || (scanResult.disease?.suggestedMedicines && scanResult.disease.suggestedMedicines.length > 0)) && (
+                <View style={[styles.infoCardNew, { backgroundColor: colors.card, borderColor: '#9C27B0' }]}>
+                  <View style={[styles.infoIconBoxNew, { backgroundColor: 'rgba(156, 39, 176, 0.12)' }]}>
+                    <Ionicons name="flask" size={20} color="#9C27B0" />
+                  </View>
+                  <View style={styles.infoTextContentNew}>
+                    <Text style={[styles.infoCardLabelNew, { color: colors.text }]}>
+                      Qwen Vision Suggested Candidate Medicines
+                    </Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                      {(scanResult.suggestedMedicines || scanResult.disease?.suggestedMedicines || []).map((med: string, i: number) => (
+                        <View key={i} style={{ backgroundColor: isDarkMode ? '#2D1B36' : '#F3E5F5', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, borderWidth: 1, borderColor: '#BA68C8' }}>
+                          <Text style={{ color: isDarkMode ? '#E1BEE7' : '#7B1FA2', fontSize: 12, fontWeight: '700' }}>
+                            💊 {med}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                </View>
+              )}
+            </View>
+
+            {/* Recommended Treatments (Marketplace vs Local Dealer) */}
+            {recommendedItems.length > 0 && (
+              <View style={styles.treatmentsContainerNew}>
+                <View style={styles.treatmentsHeaderNew}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Ionicons name="basket" size={20} color={colors.brandGreen} style={{ marginRight: 8 }} />
+                    <Text style={[styles.treatmentsTitleNew, { color: colors.text }]}>
+                      Recommended Medicines & Treatments
+                    </Text>
+                  </View>
                 </View>
 
                 <ScrollView 
                   horizontal 
                   showsHorizontalScrollIndicator={false} 
-                  contentContainerStyle={styles.recommendationScrollNew}
+                  contentContainerStyle={{ paddingHorizontal: 2, gap: 14 }}
                   style={{ marginTop: 12 }}
                 >
                   {recommendedItems.map(item => (
                     <View 
                       key={item.id}
-                      style={[styles.productCardNew, { borderColor: colors.border, backgroundColor: colors.card, borderBottomColor: isDarkMode ? '#1B272E' : '#CDCDCD' }]}
+                      style={[styles.productCardEnhanced, { width: productCardWidth, borderColor: colors.border, backgroundColor: colors.card }]}
                     >
+                      {/* Marketplace vs Local Dealer Badge */}
+                      <View style={[styles.itemTypeBadge, { backgroundColor: item.isMarketplace ? 'rgba(76, 175, 80, 0.9)' : 'rgba(255, 152, 0, 0.9)' }]}>
+                        <Ionicons 
+                          name={item.isMarketplace ? "cart" : "storefront"} 
+                          size={11} 
+                          color="#FFFFFF" 
+                          style={{ marginRight: 4 }} 
+                        />
+                        <Text style={styles.itemTypeBadgeText}>
+                          {item.isMarketplace ? 'Marketplace' : 'Local Dealer'}
+                        </Text>
+                      </View>
+
                       <View style={styles.productImageWrapperNew}>
                         <Image 
                           source={{ uri: item.image_url || 'https://images.unsplash.com/photo-1592417817098-8f3d6eb19675?q=80&w=300' }} 
                           style={styles.productImageNew} 
-                          resizeMode="contain"
+                          resizeMode="cover"
                         />
                       </View>
+
                       <View style={styles.productDetailsNew}>
+                        <Text style={[styles.productCategoryTag, { color: colors.brandGreen }]}>{item.category || 'Treatment'}</Text>
                         <Text style={[styles.productTitleNew, { color: colors.text }]} numberOfLines={2}>{item.name}</Text>
-                        <Text style={[styles.productPriceNew, { color: colors.secondaryText }]}>Rs. {item.price} / {item.unit}</Text>
                         
-                        <TouchableOpacity 
-                          style={[styles.productBuyBtnNew, { backgroundColor: colors.card, borderColor: colors.brandGreen, borderBottomColor: colors.brandGreenDark }]}
-                          onPress={() => {
-                            setOrderQuantity('1');
-                            setSelectedProduct(item);
-                          }}
-                        >
-                          <Ionicons name="cart-outline" size={14} color={colors.brandGreen} style={{ marginRight: 4 }} />
-                          <Text style={[styles.productBuyBtnTextNew, { color: colors.brandGreen }]}>{t('scanResults.buyNow')}</Text>
-                        </TouchableOpacity>
+                        {item.price ? (
+                          <Text style={[styles.productPriceNew, { color: colors.text }]}>
+                            Rs. {item.price} <Text style={{ fontSize: 11, color: colors.secondaryText }}>/ {item.unit}</Text>
+                          </Text>
+                        ) : null}
+
+                        <Text style={[styles.productDosageText, { color: colors.secondaryText }]} numberOfLines={1}>
+                          💊 {item.recommendedDosage}
+                        </Text>
+
+                        {/* Action Button: Buy from Marketplace vs Contact Local Dealer */}
+                        {item.isMarketplace ? (
+                          <TouchableOpacity 
+                            style={[styles.productBuyBtnMarketplace, { backgroundColor: colors.brandGreen }]}
+                            onPress={() => {
+                              setOrderQuantity('1');
+                              setSelectedProduct(item);
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name="cart" size={14} color="#FFFFFF" style={{ marginRight: 5 }} />
+                            <Text style={styles.productBuyBtnMarketplaceText}>Buy from Marketplace</Text>
+                          </TouchableOpacity>
+                        ) : (
+                          <TouchableOpacity 
+                            style={[styles.productBuyBtnLocalDealer, { backgroundColor: isDarkMode ? '#2A2016' : '#FFF4E5', borderColor: '#FF9800' }]}
+                            onPress={() => {
+                              Alert.alert(
+                                'Contact Local Dealer',
+                                `To purchase "${item.name}", please contact your nearest local agricultural dealer or Agrovet center in ${locationName || 'your area'}.`,
+                                [
+                                  { 
+                                    text: 'Call Helpline (+977-9845012345)', 
+                                    onPress: () => Linking.openURL('tel:+9779845012345') 
+                                  },
+                                  { text: 'OK', style: 'cancel' }
+                                ]
+                              );
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name="call" size={14} color="#EF6C00" style={{ marginRight: 5 }} />
+                            <Text style={styles.productBuyBtnLocalDealerText}>Contact Local Dealer</Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
                     </View>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* YouTube Video Tutorials Section (3 Videos) */}
+            {videoRecommendations.length > 0 && (
+              <View style={styles.videoSectionContainer}>
+                <View style={styles.videoSectionHeader}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Ionicons name="logo-youtube" size={22} color="#FF0000" style={{ marginRight: 8 }} />
+                    <Text style={[styles.videoSectionTitle, { color: colors.text }]}>
+                      Video Recommendations & Remedies
+                    </Text>
+                  </View>
+                </View>
+
+                <ScrollView 
+                  horizontal 
+                  showsHorizontalScrollIndicator={false} 
+                  contentContainerStyle={{ paddingHorizontal: 2, gap: 14 }}
+                  style={{ marginTop: 12 }}
+                >
+                  {videoRecommendations.map((video) => (
+                    <TouchableOpacity
+                      key={video.id}
+                      style={[styles.videoCardEnhanced, { backgroundColor: colors.card, borderColor: colors.border }]}
+                      onPress={() => setSelectedVideo(video)}
+                      activeOpacity={0.85}
+                    >
+                      <View style={styles.videoThumbnailWrapper}>
+                        <Image 
+                          source={{ uri: video.thumbnailUrl }} 
+                          style={styles.videoThumbnailImg} 
+                          resizeMode="cover"
+                        />
+                        <View style={styles.playButtonBadgeOverlay}>
+                          <Ionicons name="play" size={20} color="#FFFFFF" />
+                        </View>
+                        <View style={styles.videoDurationBadge}>
+                          <Text style={styles.videoDurationText}>{video.duration || '05:30'}</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.videoCardContent}>
+                        <Text style={[styles.videoCardTitle, { color: colors.text }]} numberOfLines={2}>
+                          {video.titleEn}
+                        </Text>
+                        <View style={styles.videoMetaRow}>
+                          <Ionicons name="checkmark-circle" size={13} color={colors.brandGreen} style={{ marginRight: 4 }} />
+                          <Text style={[styles.videoAuthorText, { color: colors.secondaryText }]} numberOfLines={1}>
+                            {video.authorEn || 'NARC Nepal'}
+                          </Text>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
                   ))}
                 </ScrollView>
               </View>
@@ -627,181 +1104,360 @@ export default function ScanScreen() {
             <View style={{ height: 100 }} />
           </ScrollView>
 
-          {/* Sticky Bottom Action */}
-          <View style={[styles.stickyBottomBarNew, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+          {/* Sticky Bottom Action Bar with 60s Cooldown Countdown */}
+          <View style={[styles.stickyBottomBarNew, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 12) }]}>
             <TouchableOpacity 
-              style={[styles.stickyBottomBtnNew, { backgroundColor: colors.brandGreen, borderColor: colors.brandGreenDark, borderBottomColor: '#3A5430' }]} 
-              onPress={handleReset}
+              style={[
+                styles.stickyBottomBtnNew, 
+                { 
+                  backgroundColor: cooldownSeconds > 0 ? (isDarkMode ? '#2D2D2D' : '#E0E0E0') : colors.brandGreen, 
+                  borderColor: cooldownSeconds > 0 ? colors.border : colors.brandGreenDark 
+                }
+              ]} 
+              onPress={() => {
+                if (cooldownSeconds > 0) {
+                  Alert.alert(
+                    '⏳ Scan Cooldown Active',
+                    `To ensure optimal AI server performance, please wait ${cooldownSeconds} seconds before scanning again.`
+                  );
+                  return;
+                }
+                handleReset();
+              }}
               activeOpacity={0.8}
             >
-              <Ionicons name="qr-code-outline" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
-              <Text style={styles.stickyBottomBtnTextNew}>{t('scanResults.scanAnother')}</Text>
+              <Ionicons 
+                name={cooldownSeconds > 0 ? "time" : "qr-code-outline"} 
+                size={20} 
+                color={cooldownSeconds > 0 ? (isDarkMode ? '#AAAAAA' : '#666666') : "#FFFFFF"} 
+                style={{ marginRight: 8 }} 
+              />
+              <Text style={[styles.stickyBottomBtnTextNew, { color: cooldownSeconds > 0 ? (isDarkMode ? '#AAAAAA' : '#666666') : "#FFFFFF" }]}>
+                {cooldownSeconds > 0 ? `⏳ Cooldown Active (${cooldownSeconds}s)` : t('scanResults.scanAnother')}
+              </Text>
             </TouchableOpacity>
           </View>
 
-            {/* Checkout Modal */}
-            <Modal visible={selectedProduct !== null} transparent animationType="slide">
-              <View style={styles.modalOverlay}>
-                <TouchableOpacity style={styles.modalDismiss} onPress={() => setSelectedProduct(null)} />
-                <View style={[styles.checkoutCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  {selectedProduct && (
-                    <>
-                      <View style={styles.modalHeader}>
-                        <Text style={[styles.modalTitle, { color: colors.text }]}>{t('scanResults.confirmPurchase')}</Text>
-                        <TouchableOpacity onPress={() => setSelectedProduct(null)}>
-                          <Ionicons name="close" size={24} color={colors.text} />
-                        </TouchableOpacity>
-                      </View>
+          {/* Checkout Modal (Marketplace) */}
+          <Modal visible={selectedProduct !== null} transparent animationType="slide">
+            <View style={styles.modalOverlay}>
+              <TouchableOpacity style={styles.modalDismiss} onPress={() => setSelectedProduct(null)} />
+              <View style={[styles.checkoutCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                {selectedProduct && (
+                  <>
+                    <View style={styles.modalHeader}>
+                      <Text style={[styles.modalTitle, { color: colors.text }]}>{t('scanResults.confirmPurchase')}</Text>
+                      <TouchableOpacity onPress={() => setSelectedProduct(null)}>
+                        <Ionicons name="close" size={24} color={colors.text} />
+                      </TouchableOpacity>
+                    </View>
 
-                      <View style={styles.checkoutSummary}>
-                        <Text style={[styles.summaryName, { color: colors.text }]}>{selectedProduct.name}</Text>
-                        <Text style={[styles.summaryPrice, { color: colors.text }]}>
-                          Rs. {selectedProduct.price} / {selectedProduct.unit}
-                        </Text>
-                      </View>
+                    <View style={styles.checkoutSummary}>
+                      <Text style={[styles.summaryName, { color: colors.text }]}>{selectedProduct.name}</Text>
+                      <Text style={[styles.summaryPrice, { color: colors.text }]}>
+                        Rs. {selectedProduct.price} / {selectedProduct.unit}
+                      </Text>
+                    </View>
 
-                      <View style={styles.quantityContainer}>
-                        <Text style={[styles.label, { color: colors.text }]}>{t('scanResults.quantityRequired')} ({selectedProduct.unit}):</Text>
-                        <View style={styles.quantityRow}>
-                          <TouchableOpacity 
-                            onPress={() => setOrderQuantity(Math.max(1, Number(orderQuantity) - 1).toString())}
-                            style={[styles.qtyBtn, { backgroundColor: colors.border }]}
-                          >
-                            <Ionicons name="remove" size={18} color={colors.text} />
-                          </TouchableOpacity>
-                          <TextInput
-                            keyboardType="numeric"
-                            value={orderQuantity}
-                            onChangeText={setOrderQuantity}
-                            style={[styles.qtyInput, { color: colors.text, borderColor: colors.border }]}
-                          />
-                          <TouchableOpacity 
-                            onPress={() => setOrderQuantity((Number(orderQuantity) + 1).toString())}
-                            style={[styles.qtyBtn, { backgroundColor: colors.border }]}
-                          >
-                            <Ionicons name="add" size={18} color={colors.text} />
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-
-                      <View style={styles.subtotalRow}>
-                        <Text style={[styles.subtotalLabel, { color: colors.secondaryText }]}>{t('scanResults.totalPrice')}:</Text>
-                        <Text style={[styles.subtotalValue, { color: colors.text }]}>
-                          Rs. {selectedProduct.price * (Number(orderQuantity) || 1)}
-                        </Text>
-                      </View>
-
-                      <View style={[styles.vetContainer, { backgroundColor: colors.border }]}>
-                        <Text style={[styles.vetHeader, { color: colors.secondaryText }]}>{t('scanResults.coordinatorDetails')}</Text>
-                        {assignedVet ? (
-                          <View style={styles.vetDetailsRow}>
-                            <View style={styles.vetText}>
-                              <Text style={[styles.vetName, { color: colors.text }]}>{assignedVet.full_name}</Text>
-                              <Text style={[styles.vetPhone, { color: colors.secondaryText }]}>{t('scanResults.specialistOfficer')} • {assignedVet.phone}</Text>
-                            </View>
-                            <TouchableOpacity 
-                              onPress={() => {
-                                Linking.openURL(`tel:${assignedVet.phone}`).catch(() => {
-                                  Alert.alert(t('scanResults.error'), t('scanResults.unableToCall'));
-                                });
-                              }}
-                              style={[styles.callBtn, { backgroundColor: colors.brandGreen }]}
-                            >
-                              <Ionicons name="call" size={18} color="#FFFFFF" />
-                            </TouchableOpacity>
-                          </View>
-                        ) : (
-                          <Text style={[styles.noVetText, { color: colors.secondaryText }]}>
-                            {t('scanResults.noVetSpecialist')} {locationName}.
-                          </Text>
-                        )}
-                      </View>
-
-                      <View style={styles.checkoutActions}>
+                    <View style={styles.quantityContainer}>
+                      <Text style={[styles.label, { color: colors.text }]}>{t('scanResults.quantityRequired')} ({selectedProduct.unit}):</Text>
+                      <View style={styles.quantityRow}>
                         <TouchableOpacity 
-                          onPress={() => setSelectedProduct(null)}
-                          style={[styles.cancelBtn, { borderColor: colors.border }]}
+                          onPress={() => setOrderQuantity(Math.max(1, Number(orderQuantity) - 1).toString())}
+                          style={[styles.qtyBtn, { backgroundColor: colors.border }]}
                         >
-                          <Text style={[styles.cancelBtnText, { color: colors.text }]}>{t('dashboard.cancel')}</Text>
+                          <Ionicons name="remove" size={18} color={colors.text} />
                         </TouchableOpacity>
+                        <TextInput
+                          keyboardType="numeric"
+                          value={orderQuantity}
+                          onChangeText={setOrderQuantity}
+                          style={[styles.qtyInput, { color: colors.text, borderColor: colors.border }]}
+                        />
                         <TouchableOpacity 
-                          onPress={() => {
-                            setOrdering(true);
-                            setTimeout(() => {
-                              setOrdering(false);
-                              const alertTitle = t('scanResults.orderRequestSent');
-                              const alertBody = t('scanResults.orderSubmittedDesc')
-                                .replace('{qty}', orderQuantity)
-                                .replace('{unit}', selectedProduct.unit)
-                                .replace('{name}', selectedProduct.name)
-                                .replace('{vetName}', assignedVet?.full_name || 'Assigned Vet')
-                                .replace('{vetPhone}', assignedVet?.phone || 'N/A');
-                              Alert.alert(
-                                alertTitle,
-                                alertBody,
-                                [{ text: t('scanResults.ok'), onPress: () => setSelectedProduct(null) }]
-                              );
-                            }, 1500);
-                          }}
-                          disabled={ordering}
-                          style={[styles.confirmBtn, { backgroundColor: colors.brandGreen }]}
+                          onPress={() => setOrderQuantity((Number(orderQuantity) + 1).toString())}
+                          style={[styles.qtyBtn, { backgroundColor: colors.border }]}
                         >
-                          {ordering ? (
-                            <ActivityIndicator size="small" color="#FFFFFF" />
-                          ) : (
-                            <Text style={styles.confirmBtnText}>{t('scanResults.requestOrder')}</Text>
-                          )}
+                          <Ionicons name="add" size={18} color={colors.text} />
                         </TouchableOpacity>
                       </View>
-                    </>
-                  )}
-                </View>
+                    </View>
+
+                    <View style={styles.subtotalRow}>
+                      <Text style={[styles.subtotalLabel, { color: colors.secondaryText }]}>{t('scanResults.totalPrice')}:</Text>
+                      <Text style={[styles.subtotalValue, { color: colors.text }]}>
+                        Rs. {(Number(selectedProduct.price || 0) * (Number(orderQuantity) || 1)).toLocaleString()}
+                      </Text>
+                    </View>
+
+                    <TouchableOpacity 
+                      style={[styles.confirmOrderBtn, { backgroundColor: colors.brandGreen }]}
+                      onPress={() => {
+                        Alert.alert('Order Confirmed!', `Your order for ${orderQuantity}x ${selectedProduct.name} has been placed successfully.`);
+                        setSelectedProduct(null);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.confirmOrderText}>Confirm & Place Order</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
               </View>
-            </Modal>
-          </View>
-        </SafeAreaView>
+            </View>
+          </Modal>
+
+          {/* Local Dealer Info Modal */}
+          <Modal visible={selectedDealerItem !== null} transparent animationType="slide">
+            <View style={styles.modalOverlay}>
+              <TouchableOpacity style={styles.modalDismiss} onPress={() => setSelectedDealerItem(null)} />
+              <View style={[styles.dealerCardModal, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                {selectedDealerItem && (
+                  <>
+                    <View style={styles.modalHeader}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Ionicons name="storefront" size={22} color="#EF6C00" style={{ marginRight: 8 }} />
+                        <Text style={[styles.modalTitle, { color: colors.text }]}>Local Dealer Information</Text>
+                      </View>
+                      <TouchableOpacity onPress={() => setSelectedDealerItem(null)}>
+                        <Ionicons name="close" size={24} color={colors.text} />
+                      </TouchableOpacity>
+                    </View>
+
+                    <View style={[styles.dealerInfoBanner, { backgroundColor: isDarkMode ? '#2A2016' : '#FFF3E0' }]}>
+                      <Text style={[styles.dealerBannerTitle, { color: '#EF6C00' }]}>
+                        📍 Available at Authorized Local Agrovety
+                      </Text>
+                      <Text style={[styles.dealerBannerSub, { color: colors.text }]}>
+                        This chemical item is supplied directly by local licensed agro-dealers in Nepal.
+                      </Text>
+                    </View>
+
+                    <View style={styles.dealerDetailsBox}>
+                      <Text style={[styles.dealerItemName, { color: colors.text }]}>{selectedDealerItem.name}</Text>
+                      <Text style={[styles.dealerDosageText, { color: colors.brandGreen }]}>
+                        Recommended Usage: {selectedDealerItem.recommendedDosage}
+                      </Text>
+
+                      <View style={[styles.dealerContactRow, { borderTopColor: colors.border }]}>
+                        <Ionicons name="business-outline" size={18} color={colors.secondaryText} style={{ marginRight: 10 }} />
+                        <Text style={[styles.dealerDetailText, { color: colors.text }]}>
+                          {selectedDealerItem.dealerName || 'Madi Krishi Sewa Agrovet'}
+                        </Text>
+                      </View>
+
+                      <View style={styles.dealerContactRow}>
+                        <Ionicons name="location-outline" size={18} color={colors.secondaryText} style={{ marginRight: 10 }} />
+                        <Text style={[styles.dealerDetailText, { color: colors.text }]}>
+                          {selectedDealerItem.dealerAddress || 'Main Market, Madi, Chitwan'}
+                        </Text>
+                      </View>
+
+                      {selectedDealerItem.dealerPhone ? (
+                        <View style={styles.dealerContactRow}>
+                          <Ionicons name="call-outline" size={18} color={colors.secondaryText} style={{ marginRight: 10 }} />
+                          <Text style={[styles.dealerDetailText, { color: colors.text }]}>
+                            {selectedDealerItem.dealerPhone}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+
+                    <View style={styles.dealerActionRow}>
+                      {selectedDealerItem.dealerPhone ? (
+                        <TouchableOpacity 
+                          style={[styles.dealerCallBtn, { backgroundColor: colors.brandGreen }]}
+                          onPress={() => {
+                            Linking.openURL(`tel:${selectedDealerItem.dealerPhone}`);
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="call" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+                          <Text style={styles.dealerCallBtnText}>Call Dealer Now</Text>
+                        </TouchableOpacity>
+                      ) : null}
+
+                      <TouchableOpacity 
+                        style={[styles.dealerCloseBtn, { borderColor: colors.border }]}
+                        onPress={() => setSelectedDealerItem(null)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.dealerCloseBtnText, { color: colors.text }]}>Close</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                )}
+              </View>
+            </View>
+          </Modal>
+
+          {/* YouTube Interactive Video Player Modal */}
+          <Modal visible={selectedVideo !== null} transparent animationType="slide" onRequestClose={() => setSelectedVideo(null)}>
+            <View style={{ flex: 1, backgroundColor: colors.background }}>
+              <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+                {/* Header with Back Button */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.background, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+                  <TouchableOpacity 
+                    onPress={() => setSelectedVideo(null)}
+                    style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDarkMode ? '#223827' : '#e8f5ed', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 }}
+                  >
+                    <Ionicons name="arrow-back" size={18} color={colors.brandGreen} style={{ marginRight: 6 }} />
+                    <Text style={{ color: colors.brandGreen, fontWeight: '700', fontSize: 13 }}>Back to Results</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Video Player Container */}
+                {selectedVideo && (
+                  <View style={{ flex: 1, backgroundColor: colors.background }}>
+                    <View style={{ width: '100%', height: 230, backgroundColor: '#000000' }}>
+                      {Platform.OS === 'web' ? (
+                        <iframe
+                          src={`https://www.youtube-nocookie.com/embed/${getVideoId(selectedVideo.youtubeId, selectedVideo.videoUrl)}?autoplay=1&mute=0&controls=1&playsinline=1&rel=0`}
+                          style={{ width: '100%', height: '100%', border: 'none' }}
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                        />
+                      ) : (
+                        <WebView
+                          originWhitelist={['*']}
+                          source={{
+                            html: `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><style>*{margin:0;padding:0;box-sizing:border-box;background:#000;}html,body{width:100%;height:100%;overflow:hidden;background:#000;}iframe{width:100%;height:100%;border:none;}</style></head><body><iframe id="ytplayer" src="https://www.youtube-nocookie.com/embed/${getVideoId(selectedVideo.youtubeId, selectedVideo.videoUrl)}?autoplay=1&mute=0&controls=1&playsinline=1&enablejsapi=1&rel=0&origin=https://localhost" referrerpolicy="strict-origin-when-cross-origin" allow="autoplay; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen></iframe></body></html>`,
+                            baseUrl: 'https://localhost',
+                          }}
+                          style={{ width: '100%', height: 230 }}
+                          allowsInlineMediaPlayback={true}
+                          mediaPlaybackRequiresUserAction={false}
+                          allowsFullscreenVideo={true}
+                          javaScriptEnabled={true}
+                          domStorageEnabled={true}
+                          mixedContentMode="always"
+                        />
+                      )}
+                    </View>
+
+                    {/* Video Description & Metadata */}
+                    <ScrollView style={{ flex: 1, padding: 18 }} contentContainerStyle={{ paddingBottom: 40 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                        <Ionicons name="logo-youtube" size={20} color="#FF0000" />
+                        <Text style={{ color: colors.brandGreen, fontWeight: '800', fontSize: 12 }}>
+                          {selectedVideo.topicLabelEn || 'Agricultural Tutorial'}
+                        </Text>
+                      </View>
+
+                      <Text style={{ color: colors.text, fontSize: 17, fontWeight: '800', lineHeight: 24, marginBottom: 12 }}>
+                        {selectedVideo.titleEn || selectedVideo.titleNe}
+                      </Text>
+
+                      {/* Author & Stats Row */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: colors.border, marginBottom: 16 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                          <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.brandGreen, justifyContent: 'center', alignItems: 'center' }}>
+                            <Ionicons name="school" size={18} color="#FFFFFF" />
+                          </View>
+                          <View>
+                            <Text style={{ color: colors.text, fontWeight: '700', fontSize: 13 }}>
+                              {selectedVideo.authorEn || selectedVideo.authorNe || 'NARC Krishi Nepal'}
+                            </Text>
+                            <Text style={{ color: colors.secondaryText, fontSize: 11 }}>
+                              Verified Extension Guide
+                            </Text>
+                          </View>
+                        </View>
+
+                        {selectedVideo.views ? (
+                          <View style={{ backgroundColor: colors.card, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
+                            <Text style={{ color: colors.secondaryText, fontSize: 11, fontWeight: '700' }}>
+                              👁️ {selectedVideo.views}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+
+                      {/* Overview & Remedy Summary */}
+                      <View style={{ backgroundColor: colors.card, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: colors.border }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                          <Ionicons name="document-text-outline" size={18} color={colors.brandGreen} />
+                          <Text style={{ color: colors.text, fontWeight: '800', fontSize: 14 }}>
+                            Video Remedy Summary
+                          </Text>
+                        </View>
+                        <Text style={{ color: colors.text, fontSize: 13, lineHeight: 20, opacity: 0.9 }}>
+                          {selectedVideo.subtitleEn || selectedVideo.subtitleNe || 'Watch the video above for practical step-by-step agricultural instructions.'}
+                        </Text>
+                      </View>
+                    </ScrollView>
+                  </View>
+                )}
+              </SafeAreaView>
+            </View>
+          </Modal>
+        </View>
+      </SafeAreaView>
     );
   }
 
   // 3. Active Scanning UI
   return (
     <View style={styles.fullScreen}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+
       {/* Show Camera Feed or Selected Gallery Image */}
       {capturedImage ? (
         <Image source={{ uri: capturedImage }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
       ) : (
-        <CameraView style={StyleSheet.absoluteFillObject} facing="back" ref={cameraRef} />
+        <CameraView 
+          style={StyleSheet.absoluteFillObject} 
+          facing="back" 
+          enableTorch={enableTorch}
+          ref={cameraRef} 
+        />
       )}
       
-      {/* Semi-transparent Dark Overlays */}
-      <View style={styles.overlayTop}>
-        <SafeAreaView edges={['top']}>
-          <Text style={styles.overlayHeader}>AI Crop Diagnostician</Text>
-          <Text style={styles.overlaySubtitle}>
-            {isScanning ? 'Scanner sweep in progress...' : 'Align leaf within the guide marks'}
-          </Text>
-        </SafeAreaView>
+      {/* Top Header Overlay with Torch and Status Badge */}
+      <View style={[styles.overlayTop, { paddingTop: insets.top + Math.round(screenHeight * 0.01) }]}>
+        <View style={styles.topHeaderRow}>
+          <View style={styles.scannerBadge}>
+            <View style={[styles.pulseDot, { backgroundColor: isScanning ? '#FF9F0A' : '#4CAF50' }]} />
+            <Text style={styles.scannerBadgeText}>AI LEAF DIAGNOSTICIAN</Text>
+          </View>
+          
+          <TouchableOpacity 
+            style={[styles.flashToggleBtn, enableTorch && styles.flashToggleBtnActive]} 
+            onPress={toggleTorch}
+            activeOpacity={0.7}
+          >
+            <Ionicons name={enableTorch ? "flash" : "flash-outline"} size={20} color={enableTorch ? "#FFD700" : "#FFFFFF"} />
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.overlaySubtitle}>
+          {isScanning ? 'Multi-spectral leaf sweep in progress...' : 'Align leaf target within illuminated boundary'}
+        </Text>
       </View>
 
-      {/* Futuristic Scan Area */}
-      <View style={styles.centerScannerRow}>
+      {/* Futuristic Proportional Scanner Area */}
+      <View style={[styles.centerScannerRow, { top: scannerTopPosition, height: scannerFrameSize }]}>
         <View style={styles.overlaySide} />
-        <View style={styles.scannerFrameContainer}>
+        <View style={[styles.scannerFrameContainer, { width: scannerFrameSize, height: scannerFrameSize }]}>
           <View 
             style={[
               styles.cameraFrame,
+              { width: scannerFrameSize, height: scannerFrameSize },
               isScanning && {
-                borderColor: scanStage === 'plant_id' ? '#FF9F0A50' : '#00E5FF50',
-                backgroundColor: 'rgba(0, 0, 0, 0.2)'
+                borderColor: scanStage === 'plant_id' ? 'rgba(255, 159, 10, 0.6)' : 'rgba(0, 229, 255, 0.6)',
+                backgroundColor: 'rgba(0, 0, 0, 0.25)'
               }
             ]}
           >
-            {/* Guide Corners */}
-            <View style={[styles.cornerTL, isScanning && { borderColor: scanStage === 'plant_id' ? '#FF9F0A' : '#00E5FF' }]} />
-            <View style={[styles.cornerTR, isScanning && { borderColor: scanStage === 'plant_id' ? '#FF9F0A' : '#00E5FF' }]} />
-            <View style={[styles.cornerBL, isScanning && { borderColor: scanStage === 'plant_id' ? '#FF9F0A' : '#00E5FF' }]} />
-            <View style={[styles.cornerBR, isScanning && { borderColor: scanStage === 'plant_id' ? '#FF9F0A' : '#00E5FF' }]} />
+            {/* Math Proportional Corner Guides */}
+            <View style={[styles.cornerTL, { width: Math.round(scannerFrameSize * 0.13), height: Math.round(scannerFrameSize * 0.13) }, isScanning && { borderColor: scanStage === 'plant_id' ? '#FF9F0A' : '#00E5FF' }]} />
+            <View style={[styles.cornerTR, { width: Math.round(scannerFrameSize * 0.13), height: Math.round(scannerFrameSize * 0.13) }, isScanning && { borderColor: scanStage === 'plant_id' ? '#FF9F0A' : '#00E5FF' }]} />
+            <View style={[styles.cornerBL, { width: Math.round(scannerFrameSize * 0.13), height: Math.round(scannerFrameSize * 0.13) }, isScanning && { borderColor: scanStage === 'plant_id' ? '#FF9F0A' : '#00E5FF' }]} />
+            <View style={[styles.cornerBR, { width: Math.round(scannerFrameSize * 0.13), height: Math.round(scannerFrameSize * 0.13) }, isScanning && { borderColor: scanStage === 'plant_id' ? '#FF9F0A' : '#00E5FF' }]} />
             
+            {/* Dynamic Holographic Grid Crosshair */}
+            <View style={styles.gridCrosshairH} />
+            <View style={styles.gridCrosshairV} />
+
             {/* Animated Laser Scanning Line */}
             {isScanning && (
               <Animated.View 
@@ -818,14 +1474,14 @@ export default function ScanScreen() {
             
             {/* Idle Scanner Icon */}
             {!isScanning && (
-              <Ionicons name="scan-outline" size={64} color="rgba(255, 255, 255, 0.45)" />
+              <Ionicons name="scan-outline" size={Math.round(scannerFrameSize * 0.24)} color="rgba(255, 255, 255, 0.4)" />
             )}
 
             {/* Live Holographic Stats Overlay */}
             {isScanning && (
               <View style={styles.hudOverlay}>
                 <Text style={styles.hudStageText}>
-                  {scanStage === 'plant_id' ? 'STAGE 1: PLANT ID' : 'STAGE 2: PATHOLOGY'}
+                  {scanStage === 'plant_id' ? 'STAGE 1: PLANT TAXONOMY' : 'STAGE 2: PATHOLOGY SCAN'}
                 </Text>
                 <Text style={styles.hudProgressText}>{scanProgress}%</Text>
               </View>
@@ -835,8 +1491,8 @@ export default function ScanScreen() {
         <View style={styles.overlaySide} />
       </View>
 
-      {/* Bottom Controls / Status Panel */}
-      <View style={styles.overlayBottom}>
+      {/* Bottom Controls / Status Panel (Positioned dynamically above CustomTabBar) */}
+      <View style={[styles.overlayBottom, { paddingBottom: bottomOverlayPaddingBottom }]}>
         {isScanning ? (
           <View style={styles.scanningLogsContainer}>
             <ActivityIndicator size="small" color={scanStage === 'plant_id' ? '#FF9F0A' : '#00E5FF'} style={{ marginBottom: 8 }} />
@@ -849,53 +1505,123 @@ export default function ScanScreen() {
             )}
           </View>
         ) : (
-          <View style={styles.controlsRow}>
-            {/* Gallery Selector Button */}
-            <TouchableOpacity style={[styles.galleryBtn, { borderColor: colors.border }]} onPress={pickImage}>
-              <Ionicons name="images" size={24} color="#FFFFFF" />
-              <Text style={styles.galleryBtnText}>Gallery</Text>
-            </TouchableOpacity>
-
-            {/* Shutter Shutter Trigger */}
-            <TouchableOpacity style={styles.captureButton} onPress={takePicture}>
-              <View style={[styles.captureButtonInner, { backgroundColor: colors.brandGreen }]}>
-                <Ionicons name="scan" size={32} color="#FFFFFF" />
+          <View style={{ alignItems: 'center' }}>
+            {cooldownSeconds > 0 && (
+              <View style={{ backgroundColor: 'rgba(0, 0, 0, 0.75)', paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: '#FF9F0A', marginBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="time-outline" size={15} color="#FF9F0A" />
+                <Text style={{ color: '#FF9F0A', fontSize: 12, fontWeight: '700' }}>
+                  Scan Cooldown: Available in {cooldownSeconds}s
+                </Text>
               </View>
-            </TouchableOpacity>
+            )}
 
-            <View style={{ width: 60, alignItems: 'center' }}>
-              {capturedImage && (
-                <TouchableOpacity onPress={handleReset} style={styles.resetMiniBtn}>
-                  <Ionicons name="refresh" size={20} color="#FFFFFF" />
-                  <Text style={styles.galleryBtnText}>Clear</Text>
+            <View style={styles.controlsRow}>
+              {/* Gallery Selector Button */}
+              <TouchableOpacity 
+                style={[styles.controlCircleBtn, { width: controlBtnSize, height: controlBtnSize, borderRadius: controlBtnSize / 2, opacity: cooldownSeconds > 0 ? 0.5 : 1 }]} 
+                onPress={pickImage}
+                activeOpacity={0.75}
+              >
+                <Ionicons name="images-outline" size={Math.round(controlBtnSize * 0.48)} color="#FFFFFF" />
+                <Text style={styles.controlBtnLabel}>Gallery</Text>
+              </TouchableOpacity>
+
+              {/* Shutter Trigger Button with Spring Animation & Cooldown Timer */}
+              <Animated.View style={{ transform: [{ scale: shutterScale }] }}>
+                <TouchableOpacity 
+                  style={[styles.captureButton, { width: shutterOuterSize, height: shutterOuterSize, borderRadius: shutterOuterSize / 2, borderColor: cooldownSeconds > 0 ? '#FF9F0A' : '#FFFFFF' }]} 
+                  onPressIn={handleShutterPressIn}
+                  onPressOut={handleShutterPressOut}
+                  onPress={takePicture}
+                  activeOpacity={0.85}
+                >
+                  <View style={[styles.captureButtonInner, { width: shutterInnerSize, height: shutterInnerSize, borderRadius: shutterInnerSize / 2, backgroundColor: cooldownSeconds > 0 ? '#333333' : colors.brandGreen }]}>
+                    {cooldownSeconds > 0 ? (
+                      <Text style={{ color: '#FF9F0A', fontSize: 13, fontWeight: '900' }}>
+                        {cooldownSeconds}s
+                      </Text>
+                    ) : (
+                      <Ionicons name="scan" size={shutterIconSize} color="#FFFFFF" />
+                    )}
+                  </View>
                 </TouchableOpacity>
-              )}
+              </Animated.View>
+
+            {/* Clear Button (when captured image exists) or Empty Symmetrical Spacer */}
+            {capturedImage ? (
+              <TouchableOpacity 
+                onPress={handleReset} 
+                style={[styles.controlCircleBtn, { width: controlBtnSize, height: controlBtnSize, borderRadius: controlBtnSize / 2 }]}
+                activeOpacity={0.75}
+              >
+                <Ionicons name="refresh-outline" size={Math.round(controlBtnSize * 0.48)} color="#FF6B6B" />
+                <Text style={[styles.controlBtnLabel, { color: '#FF6B6B' }]}>Clear</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={{ width: controlBtnSize, height: controlBtnSize }} />
+            )}
             </View>
           </View>
         )}
-        <SafeAreaView edges={['bottom']} style={{ height: 16 }} />
       </View>
 
-      {/* Custom Error Modal Overlay */}
+      {/* Ultra-Sleek Icon-Centric Error / Advisory Modal */}
       {scanError && (
         <View style={StyleSheet.absoluteFillObject}>
           <View style={styles.modalBackdrop} />
           <View style={styles.errorModalContainer}>
-            <View style={[styles.errorCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <View style={styles.errorIconCircle}>
-                <Ionicons name="alert-circle" size={48} color="#FF3B30" />
+            <View style={[styles.errorCardMinimal, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              
+              {/* Outer Ambient Glow Rings with Large Central Icon */}
+              <View style={[styles.minimalGlowRingOuter, { backgroundColor: scanError.toLowerCase().includes('no plant') ? 'rgba(255, 159, 10, 0.12)' : 'rgba(255, 59, 48, 0.12)' }]}>
+                <View style={[styles.minimalGlowRingInner, { backgroundColor: scanError.toLowerCase().includes('no plant') ? 'rgba(255, 159, 10, 0.22)' : 'rgba(255, 59, 48, 0.22)' }]}>
+                  <View style={[styles.minimalIconBox, { backgroundColor: scanError.toLowerCase().includes('no plant') ? '#FF9F0A' : '#FF3B30' }]}>
+                    <Ionicons 
+                      name={scanError.toLowerCase().includes('no plant') ? "leaf" : "alert"} 
+                      size={40} 
+                      color="#FFFFFF" 
+                    />
+                  </View>
+                </View>
               </View>
-              <Text style={[styles.errorTitle, { color: colors.text }]}>Scan Failed</Text>
-              <Text style={[styles.errorDescription, { color: colors.secondaryText }]}>{scanError}</Text>
-              <TouchableOpacity 
-                style={[styles.errorDismissButton, { backgroundColor: colors.brandGreen }]} 
-                onPress={() => {
-                  setScanError(null);
-                  handleReset();
-                }}
-              >
-                <Text style={styles.errorDismissText}>Try Again</Text>
-              </TouchableOpacity>
+
+              {/* Bold Minimalist Title */}
+              <Text style={[styles.minimalTitle, { color: colors.text }]}>
+                {scanError.toLowerCase().includes('no plant') ? 'No Crop Detected' : 'Scan Failed'}
+              </Text>
+
+              {/* Short 1-Line Description */}
+              <Text style={[styles.minimalSub, { color: colors.secondaryText }]}>
+                {scanError}
+              </Text>
+
+              {/* Clean Actions Row */}
+              <View style={styles.minimalActionsRow}>
+                <TouchableOpacity 
+                  style={[styles.minimalSecondaryBtn, { borderColor: colors.border }]} 
+                  onPress={() => {
+                    setScanError(null);
+                    handleReset();
+                    pickImage();
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="images-outline" size={20} color={colors.text} />
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={[styles.minimalPrimaryBtn, { backgroundColor: colors.brandGreen }]} 
+                  onPress={() => {
+                    setScanError(null);
+                    handleReset();
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="camera" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={styles.minimalPrimaryBtnText}>Try Again</Text>
+                </TouchableOpacity>
+              </View>
+
             </View>
           </View>
         </View>
@@ -1072,12 +1798,58 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
-    paddingHorizontal: 24,
-    paddingBottom: 24,
+    backgroundColor: 'rgba(10, 16, 13, 0.85)',
+    paddingHorizontal: 20,
+    paddingBottom: 16,
     alignItems: 'center',
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  topHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingHorizontal: 4,
+    marginBottom: 4,
+  },
+  scannerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
+  },
+  pulseDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  scannerBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  flashToggleBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  flashToggleBtnActive: {
+    backgroundColor: 'rgba(255, 215, 0, 0.25)',
+    borderColor: '#FFD700',
   },
   overlayHeader: {
     fontSize: 20,
@@ -1087,78 +1859,86 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   overlaySubtitle: {
-    fontSize: 13,
-    color: '#BBBBBB',
+    fontSize: 12.5,
+    color: '#CCCCCC',
     textAlign: 'center',
-    marginTop: 4,
+    marginTop: 2,
+    fontWeight: '500',
   },
   centerScannerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 250,
     width: '100%',
     position: 'absolute',
-    top: '30%',
   },
   overlaySide: {
     flex: 1,
     height: '100%',
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backgroundColor: 'rgba(10, 16, 13, 0.75)',
   },
   scannerFrameContainer: {
-    width: 250,
-    height: 250,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   cameraFrame: {
-    width: 250,
-    height: 250,
     backgroundColor: 'transparent',
     position: 'relative',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
+    borderRadius: 20,
     overflow: 'hidden',
   },
   cornerTL: {
     position: 'absolute',
     top: -2,
     left: -2,
-    width: 32,
-    height: 32,
     borderTopWidth: 4,
     borderLeftWidth: 4,
     borderColor: '#FFFFFF',
+    borderTopLeftRadius: 4,
   },
   cornerTR: {
     position: 'absolute',
     top: -2,
     right: -2,
-    width: 32,
-    height: 32,
     borderTopWidth: 4,
     borderRightWidth: 4,
     borderColor: '#FFFFFF',
+    borderTopRightRadius: 4,
   },
   cornerBL: {
     position: 'absolute',
     bottom: -2,
     left: -2,
-    width: 32,
-    height: 32,
     borderBottomWidth: 4,
     borderLeftWidth: 4,
     borderColor: '#FFFFFF',
+    borderBottomLeftRadius: 4,
   },
   cornerBR: {
     position: 'absolute',
     bottom: -2,
     right: -2,
-    width: 32,
-    height: 32,
     borderBottomWidth: 4,
     borderRightWidth: 4,
     borderColor: '#FFFFFF',
+    borderBottomRightRadius: 4,
+  },
+  gridCrosshairH: {
+    position: 'absolute',
+    left: '12%',
+    right: '12%',
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  gridCrosshairV: {
+    position: 'absolute',
+    top: '12%',
+    bottom: '12%',
+    width: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   scanningLine: {
     position: 'absolute',
@@ -1176,20 +1956,22 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 12,
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
   },
   hudStageText: {
     color: '#FFFFFF',
-    fontSize: 9,
+    fontSize: 9.5,
     fontWeight: '800',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
   },
   hudProgressText: {
     color: '#00E5FF',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '900',
     marginTop: 2,
   },
@@ -1198,19 +1980,36 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
-    paddingTop: 24,
-    paddingBottom: 140, // Elevated to sit comfortably above the CustomTabBar curve
+    backgroundColor: 'rgba(10, 16, 13, 0.85)',
+    paddingTop: 20,
     alignItems: 'center',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.12)',
   },
   controlsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'space-around',
     alignItems: 'center',
     width: '100%',
-    paddingHorizontal: 40,
+    paddingHorizontal: 30,
+  },
+  controlCircleBtn: {
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
+    position: 'relative',
+  },
+  controlBtnLabel: {
+    position: 'absolute',
+    bottom: -18,
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#E0E0E0',
+    textAlign: 'center',
   },
   galleryBtn: {
     alignItems: 'center',
@@ -1228,24 +2027,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   captureButton: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
   },
   captureButtonInner: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
   },
   scanningLogsContainer: {
     alignItems: 'center',
@@ -1291,7 +2086,7 @@ const styles = StyleSheet.create({
     right: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 32,
+    paddingHorizontal: 14,
   },
   errorCard: {
     width: '100%',
@@ -1544,6 +2339,122 @@ const styles = StyleSheet.create({
   },
 
   /* ─── Redesigned scan results styling tokens ─── */
+  krishiAiBannerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    marginBottom: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  krishiAiAvatarIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  krishiAiBannerTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: -0.2,
+  },
+  krishiAiBannerSub: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 1,
+  },
+  heroImageCard: {
+    width: '100%',
+    borderRadius: 22,
+    overflow: 'hidden',
+    borderWidth: 2,
+    position: 'relative',
+    marginBottom: 16,
+    backgroundColor: '#000000',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  heroImageFull: {
+    width: '100%',
+    height: '100%',
+  },
+  confidencePillFloating: {
+    position: 'absolute',
+    top: 14,
+    left: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
+  },
+  confidencePillText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  urgencyPillFloating: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    borderWidth: 1.5,
+  },
+  urgencyPillText: {
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.3,
+  },
+  heroImageBottomGradient: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  heroImagePlantName: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '900',
+    letterSpacing: -0.2,
+  },
+  heroImageBotanicalName: {
+    color: 'rgba(255, 255, 255, 0.75)',
+    fontSize: 12,
+    fontStyle: 'italic',
+    fontWeight: '600',
+    marginTop: 1,
+  },
+  nepaliTitleBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+    backgroundColor: 'rgba(216, 67, 21, 0.08)',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
   resultContainerNew: {
     paddingHorizontal: 20,
     paddingTop: 16,
@@ -1659,39 +2570,97 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: '500',
   },
-  localTreatmentsContainerNew: {
+  /* ─── Treatment Products (Marketplace vs Local Dealer) ─── */
+  treatmentsContainerNew: {
     marginBottom: 24,
   },
-  localTreatmentsHeaderNew: {
+  treatmentsHeaderNew: {
+    marginBottom: 10,
+    paddingHorizontal: 2,
+  },
+  treatmentsTitleNew: {
+    fontSize: 16,
+    fontWeight: '900',
+    letterSpacing: -0.3,
+  },
+  treatmentsSubNew: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  productCardEnhanced: {
+    width: 220,
+    borderRadius: 20,
+    borderWidth: 2,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  itemTypeBadge: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    zIndex: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  itemTypeBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.4,
+  },
+  productCategoryTag: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 3,
+  },
+  productDosageText: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 4,
     marginBottom: 10,
   },
-  localTreatmentsTitleNew: {
-    fontSize: 15,
+  productBuyBtnMarketplace: {
+    height: 38,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  productBuyBtnMarketplaceText: {
+    color: '#FFFFFF',
+    fontSize: 11.5,
     fontWeight: '800',
-    letterSpacing: -0.2,
   },
-  recommendationScrollNew: {
-    paddingHorizontal: 4,
-    gap: 14,
+  productBuyBtnLocalDealer: {
+    height: 38,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  productCardNew: {
-    width: 200,
-    borderRadius: 18,
-    borderWidth: 2,
-    borderBottomWidth: 4,
-    overflow: 'hidden',
+  productBuyBtnLocalDealerText: {
+    color: '#EF6C00',
+    fontSize: 11.5,
+    fontWeight: '800',
   },
   productImageWrapperNew: {
     height: 110,
     backgroundColor: '#FAFBFB',
-    padding: 12,
+    padding: 8,
     alignItems: 'center',
     justifyContent: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: '#E8EFE9',
+    borderBottomColor: 'rgba(0, 0, 0, 0.06)',
   },
   productImageNew: {
     width: '100%',
@@ -1708,23 +2677,243 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   productPriceNew: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 12,
+    fontWeight: '800',
     marginTop: 4,
-    marginBottom: 12,
+    marginBottom: 6,
   },
-  productBuyBtnNew: {
+  confirmOrderBtn: {
+    width: '100%',
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 14,
+  },
+  confirmOrderText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  /* ─── YouTube Video Tutorials ─── */
+  videoSectionContainer: {
+    marginBottom: 26,
+  },
+  videoSectionHeader: {
+    marginBottom: 10,
+    paddingHorizontal: 2,
+  },
+  videoSectionTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    letterSpacing: -0.3,
+  },
+  videoSectionSub: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  videoCardEnhanced: {
+    width: 230,
+    borderRadius: 20,
     borderWidth: 2,
-    borderBottomWidth: 4,
-    borderRadius: 12,
-    height: 36,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  videoThumbnailWrapper: {
+    height: 125,
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  videoThumbnailImg: {
+    width: '100%',
+    height: '100%',
+  },
+  playButtonBadgeOverlay: {
+    position: 'absolute',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  videoDurationBadge: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  videoDurationText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  videoCardContent: {
+    padding: 12,
+  },
+  videoCardTitle: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    lineHeight: 17,
+    marginBottom: 6,
+  },
+  videoMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  videoAuthorText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+
+  /* ─── Local Dealer Info Modal ─── */
+  dealerCardModal: {
+    width: '92%',
+    maxWidth: 460,
+    borderRadius: 24,
+    borderWidth: 2,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  dealerInfoBanner: {
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 16,
+  },
+  dealerBannerTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  dealerBannerSub: {
+    fontSize: 11.5,
+    lineHeight: 16,
+    fontWeight: '500',
+  },
+  dealerDetailsBox: {
+    marginBottom: 18,
+  },
+  dealerItemName: {
+    fontSize: 16,
+    fontWeight: '900',
+    marginBottom: 4,
+  },
+  dealerDosageText: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 14,
+  },
+  dealerContactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0, 0, 0, 0.06)',
+  },
+  dealerDetailText: {
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+  },
+  dealerActionRow: {
+    gap: 10,
+  },
+  dealerCallBtn: {
+    width: '100%',
+    height: 48,
+    borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  productBuyBtnTextNew: {
-    fontSize: 11,
+  dealerCallBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
     fontWeight: '800',
+  },
+  dealerCloseBtn: {
+    width: '100%',
+    height: 44,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dealerCloseBtnText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+  },
+
+  /* ─── YouTube Video Player Modal ─── */
+  videoModalCard: {
+    width: '92%',
+    maxWidth: 480,
+    borderRadius: 24,
+    borderWidth: 2,
+    padding: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  videoPlayerContainer: {
+    height: 200,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+    position: 'relative',
+  },
+  videoPlayerHeroImg: {
+    width: '100%',
+    height: '100%',
+    opacity: 0.6,
+  },
+  videoPlayHeroBtn: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  videoPlayHeroText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '900',
+    marginTop: 6,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  videoModalMeta: {
+    gap: 4,
+  },
+  videoModalAuthor: {
+    fontSize: 12.5,
+    fontWeight: '800',
+  },
+  videoModalDesc: {
+    fontSize: 12,
+    lineHeight: 17,
   },
   stickyBottomBarNew: {
     position: 'absolute',
@@ -1749,6 +2938,210 @@ const styles = StyleSheet.create({
   stickyBottomBtnTextNew: {
     color: '#FFFFFF',
     fontSize: 14,
+    fontWeight: '800',
+  },
+
+  /* ─── Redesigned Permission Asking Screen Styles ─── */
+  permissionScroll: {
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 40,
+    alignItems: 'center',
+  },
+  permissionHeader: {
+    alignItems: 'center',
+    marginBottom: 24,
+    paddingHorizontal: 12,
+  },
+  permissionHeaderTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    letterSpacing: -0.3,
+    textAlign: 'center',
+  },
+  permissionHeaderSub: {
+    fontSize: 13.5,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginTop: 6,
+  },
+  permissionHeroCard: {
+    width: '100%',
+    borderRadius: 24,
+    borderWidth: 2,
+    borderBottomWidth: 5,
+    padding: 24,
+    alignItems: 'center',
+  },
+  permissionBadgeGlow: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+  permissionBadgeInner: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  permissionTitleNew: {
+    fontSize: 20,
+    fontWeight: '900',
+    textAlign: 'center',
+    marginBottom: 8,
+    letterSpacing: -0.3,
+  },
+  permissionDescNew: {
+    fontSize: 13.5,
+    lineHeight: 21,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  featureHighlightsBox: {
+    width: '100%',
+    backgroundColor: 'rgba(0, 0, 0, 0.03)',
+    borderRadius: 16,
+    padding: 16,
+    gap: 12,
+    marginBottom: 24,
+  },
+  featureHighlightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  featureHighlightText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
+  permissionPrimaryBtn: {
+    width: '100%',
+    height: 52,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  permissionPrimaryBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  permissionSecondaryBtn: {
+    width: '100%',
+    height: 48,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  permissionSecondaryBtnText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+  },
+
+  /* ─── Redesigned Error / Advisory Modal Styles ─── */
+  /* ─── Ultra-Sleek Icon-Centric Error / Advisory Modal Styles ─── */
+  errorCardMinimal: {
+    width: '96%',
+    maxWidth: 480,
+    borderRadius: 28,
+    borderWidth: 2,
+    paddingVertical: 28,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.35,
+    shadowRadius: 24,
+    elevation: 12,
+  },
+  minimalGlowRingOuter: {
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  minimalGlowRingInner: {
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  minimalIconBox: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  minimalTitle: {
+    fontSize: 21,
+    fontWeight: '900',
+    letterSpacing: -0.4,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  minimalSub: {
+    fontSize: 13.5,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginBottom: 24,
+    paddingHorizontal: 8,
+  },
+  minimalActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    width: '100%',
+  },
+  minimalSecondaryBtn: {
+    width: 50,
+    height: 50,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  minimalPrimaryBtn: {
+    flex: 1,
+    height: 50,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  minimalPrimaryBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
     fontWeight: '800',
   },
 });

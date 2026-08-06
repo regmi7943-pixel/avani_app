@@ -1,15 +1,17 @@
 import { supabase } from '../lib/supabase';
+import { getAgriculturalRAGContext } from '../lib/cropKnowledgeBase';
 
 const GEMINI_API_KEY = (process.env.EXPO_PUBLIC_GEMINI_API_KEY || '') as string;
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 
 export const hasGeminiKey = GEMINI_API_KEY !== 'YOUR_GEMINI_API_KEY_HERE' && GEMINI_API_KEY !== '';
 
 export const GROQ_API_KEY = (process.env.EXPO_PUBLIC_GROQ_API_KEY || '') as string;
+export const GROQ_SECONDARY_API_KEY = (process.env.EXPO_PUBLIC_GROQ_SECONDARY_API_KEY || '') as string;
 export const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 export const GROQ_MODEL = 'llama-3.3-70b-versatile';
 
-export const hasGroqKey = GROQ_API_KEY !== 'YOUR_GROQ_API_KEY_HERE' && GROQ_API_KEY !== '';
+export const hasGroqKey = (GROQ_API_KEY !== 'YOUR_GROQ_API_KEY_HERE' && GROQ_API_KEY !== '') || (GROQ_SECONDARY_API_KEY !== '');
 
 export interface ChatMessage {
   text: string;
@@ -697,7 +699,9 @@ MANDATORY RULES:
 5. Always recommend what Nepal farmers ACTUALLY plant this month — do not invent theoretical suggestions.`;
   }
 
-  const ragContext = enrichedOverride || (isVoiceMode ? voiceInstructions : textInstructions);
+  const cropRagCtx = getAgriculturalRAGContext(userMessage);
+  const baseRagContext = enrichedOverride || (isVoiceMode ? voiceInstructions : textInstructions);
+  const ragContext = `${baseRagContext}\n\n${cropRagCtx}`;
 
   // 1. Try Groq API as primary for low latency
   if (hasGroqKey) {

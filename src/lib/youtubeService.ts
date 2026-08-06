@@ -59,7 +59,7 @@ const EXCLUDE_TERMS = [
 ];
 
 // Rich Catalog of Verified Real YouTube Videos in Nepal for Fallback
-const VERIFIED_NEPAL_YOUTUBE_VIDEOS: YouTubeFarmingItem[] = [
+export const VERIFIED_NEPAL_YOUTUBE_VIDEOS: YouTubeFarmingItem[] = [
   {
     id: 'rUrb1zxJP3o',
     youtubeId: 'rUrb1zxJP3o',
@@ -470,24 +470,14 @@ function formatViewCount(countStr?: string): string {
 }
 
 export function filterHighQualityVideos(videos: any[], statsMap: Map<string, any>): any[] {
-  return videos.filter(v => {
-    const id = v.id?.videoId || v.id;
-    const stats = statsMap.get(id);
-    if (!stats) return true; // Keep if no stats available
-    const views = parseInt(stats.viewCount || '0');
-    const likes = parseInt(stats.likeCount || '0');
-    // Minimum 1000 views and 2% like ratio
-    if (views < 1000) return false;
-    if (views > 0 && likes > 0 && (likes / views) < 0.02) return false;
-    return true;
-  }).sort((a, b) => {
+  return videos.sort((a, b) => {
     const idA = a.id?.videoId || a.id;
     const idB = b.id?.videoId || b.id;
     const statsA = statsMap.get(idA);
     const statsB = statsMap.get(idB);
-    const scoreA = statsA ? parseInt(statsA.viewCount || '0') * (parseInt(statsA.likeCount || '1') / Math.max(1, parseInt(statsA.viewCount || '1'))) : 0;
-    const scoreB = statsB ? parseInt(statsB.viewCount || '0') * (parseInt(statsB.likeCount || '1') / Math.max(1, parseInt(statsB.viewCount || '1'))) : 0;
-    return scoreB - scoreA; // Higher quality first
+    const viewsA = statsA ? parseInt(statsA.viewCount || '0', 10) : 0;
+    const viewsB = statsB ? parseInt(statsB.viewCount || '0', 10) : 0;
+    return viewsB - viewsA; // Higher view count / relevance first
   });
 }
 
@@ -502,10 +492,9 @@ export async function fetchGoogleYouTubeVideos(
   const seenVids = new Set<string>();
   let returnedNextPageToken = '';
 
-  const cropKeywords = cropFilter === 'all' ? 'farming guide NARC' : `${cropFilter} farming guide NARC`;
   const qText = searchQuery.trim() 
-    ? `Nepal ${searchQuery} farming guide` 
-    : `Nepal ${cropKeywords}`;
+    ? searchQuery.trim() 
+    : (cropFilter === 'all' ? 'crop disease treatment remedy' : `${cropFilter} crop disease treatment remedy`);
 
   if (!GOOGLE_YOUTUBE_API_KEY) {
     console.log('[YouTube API Diagnostic] EXPO_PUBLIC_YOUTUBE_API_KEY is missing in .env. Using fallback verified catalog.');
@@ -516,7 +505,7 @@ export async function fetchGoogleYouTubeVideos(
   }
 
   try {
-    let url = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=50&q=${encodeURIComponent(qText)}&type=video&regionCode=NP&relevanceLanguage=ne&videoDuration=medium&videoEmbeddable=true&key=${GOOGLE_YOUTUBE_API_KEY}`;
+    let url = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=15&q=${encodeURIComponent(qText)}&type=video&videoEmbeddable=true&key=${GOOGLE_YOUTUBE_API_KEY}`;
     if (pageToken) {
       url += `&pageToken=${pageToken}`;
     }
@@ -646,4 +635,85 @@ export async function fetchGoogleYouTubeVideos(
     : VERIFIED_NEPAL_YOUTUBE_VIDEOS.filter(v => v.cropType === cropFilter);
 
   return { items: filteredVerified.length > 0 ? filteredVerified : VERIFIED_NEPAL_YOUTUBE_VIDEOS };
+}
+
+/**
+ * Passes candidate YouTube videos to Groq Llama 3.3 70B (llama-3.3-70b-versatile)
+ * to curate and select EXACTLY 5 most relevant video tutorials for the diagnosed disease.
+ */
+export async function selectTop5VideosWithLlama70B(
+  plantName: string,
+  diseaseName: string,
+  candidateVideos: YouTubeFarmingItem[]
+): Promise<YouTubeFarmingItem[]> {
+  if (!candidateVideos || candidateVideos.length <= 5) {
+    return candidateVideos.slice(0, 5);
+  }
+
+  const apiKey = process.env.EXPO_PUBLIC_GROQ_API_KEY || '';
+  if (!apiKey) {
+    return candidateVideos.slice(0, 5);
+  }
+
+  const payloadCandidates = candidateVideos.map(v => ({
+    id: v.id,
+    title: v.titleEn,
+    channel: v.authorEn,
+    description: v.subtitleEn
+  }));
+
+  const promptText = `You are Avani's Senior Agricultural Content Curator AI.
+Diagnosed Crop: ${plantName}
+Diagnosed Disease: ${diseaseName}
+
+Candidate YouTube Videos:
+${JSON.stringify(payloadCandidates, null, 2)}
+
+Instructions:
+Evaluate the candidate YouTube videos for a farmer treating ${diseaseName} on ${plantName}.
+Select EXACTLY 5 videos that are most practical, educational, and relevant for diagnosing, treating, or managing ${diseaseName} on ${plantName}. Ignore any irrelevant videos.
+
+Output ONLY a raw JSON array containing the 5 selected video IDs:
+["id1", "id2", "id3", "id4", "id5"]`;
+
+  try {
+    console.log(`🦙 Querying Groq Llama 3.3 70B to curate top 5 video recommendations for ${diseaseName}...`);
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [{ role: 'user', content: promptText }],
+        temperature: 0.1,
+        max_tokens: 300
+      })
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const rawContent = (data?.choices?.[0]?.message?.content || '').trim();
+      console.log('🦙 Llama 3.3 70B Video Curation Output:', rawContent);
+
+      const cleanJson = rawContent.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+      const jsonMatch = cleanJson.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        const selectedIds: string[] = JSON.parse(jsonMatch[0]);
+        if (Array.isArray(selectedIds) && selectedIds.length > 0) {
+          const idSet = new Set(selectedIds);
+          const filtered = candidateVideos.filter(v => idSet.has(v.id));
+          if (filtered.length > 0) {
+            filtered.sort((a, b) => selectedIds.indexOf(a.id) - selectedIds.indexOf(b.id));
+            return filtered.slice(0, 5);
+          }
+        }
+      }
+    }
+  } catch (err: any) {
+    console.warn('Llama 3.3 70B video curation failed:', err.message);
+  }
+
+  return candidateVideos.slice(0, 5);
 }

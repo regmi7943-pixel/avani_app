@@ -9,6 +9,8 @@ export interface CartItem {
     category: string;
     price: string; // e.g. "NPR 1,450 / Pack" or "NPR 1,100 / Bag"
     subsidized_price?: string;
+    original_price?: string;
+    image_url?: string;
     dosage?: string;
     unit?: string;
     emoji?: string;
@@ -35,6 +37,16 @@ const CartContext = createContext<CartContextType>({
   cartCount: 0,
   totalAmount: 0,
 });
+
+// Helper to extract clean numeric price before slash (prevents unit specs like 50kg from inflating price)
+export const parseNumericPrice = (rawPrice: any): number => {
+  if (typeof rawPrice === 'number') return rawPrice;
+  if (!rawPrice) return 0;
+  const str = String(rawPrice);
+  const priceOnlyPart = str.split('/')[0];
+  const cleanDigits = priceOnlyPart.replace(/[^0-9]/g, '');
+  return parseInt(cleanDigits, 10) || 0;
+};
 
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -89,11 +101,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const cartCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
 
-  // Helper to parse numeric price value from string or number
+  // Accurate total amount calculation without unit spec digit interference
   const totalAmount = cartItems.reduce((acc, item) => {
-    const rawPrice = item.product.subsidized_price || item.product.price || '0';
-    const rawPriceStr = String(rawPrice);
-    const num = parseInt(rawPriceStr.replace(/[^0-9]/g, ''), 10) || 0;
+    const rawPrice = item.product.subsidized_price || item.product.price || 0;
+    const num = parseNumericPrice(rawPrice);
     return acc + num * item.quantity;
   }, 0);
 

@@ -282,6 +282,60 @@ const getChatMarkdownStyles = (textColor: string) => ({
   },
 });
 
+interface ExistingField {
+  id: string;
+  name: string;
+  crop_type?: string;
+  boundaries: MapPoint[];
+}
+
+// Point-in-polygon ray-casting test
+function isPointInPolygon(point: MapPoint, vs: MapPoint[]): boolean {
+  let x = point.latitude, y = point.longitude;
+  let inside = false;
+  for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
+    let xi = vs[i].latitude, yi = vs[i].longitude;
+    let xj = vs[j].latitude, yj = vs[j].longitude;
+    let intersect = ((yi > y) !== (yj > y))
+        && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+// Line segment intersection test
+function doSegmentsIntersect(p1: MapPoint, p2: MapPoint, p3: MapPoint, p4: MapPoint): boolean {
+  function ccw(A: MapPoint, B: MapPoint, C: MapPoint) {
+    return (C.longitude - A.longitude) * (B.latitude - A.latitude) > (B.longitude - A.longitude) * (C.latitude - A.latitude);
+  }
+  return (ccw(p1, p3, p4) !== ccw(p2, p3, p4)) && (ccw(p1, p2, p3) !== ccw(p1, p2, p4));
+}
+
+// Check if two 2D polygons overlap or intersect spatially
+function checkPolygonsOverlap(polyA: MapPoint[], polyB: MapPoint[]): boolean {
+  if (polyA.length < 3 || polyB.length < 3) return false;
+
+  // 1. Any vertex of polyA inside polyB
+  for (const p of polyA) {
+    if (isPointInPolygon(p, polyB)) return true;
+  }
+  // 2. Any vertex of polyB inside polyA
+  for (const p of polyB) {
+    if (isPointInPolygon(p, polyA)) return true;
+  }
+  // 3. Any edge of polyA intersects any edge of polyB
+  for (let i = 0; i < polyA.length; i++) {
+    const a1 = polyA[i];
+    const a2 = polyA[(i + 1) % polyA.length];
+    for (let j = 0; j < polyB.length; j++) {
+      const b1 = polyB[j];
+      const b2 = polyB[(j + 1) % polyB.length];
+      if (doSegmentsIntersect(a1, a2, b1, b2)) return true;
+    }
+  }
+  return false;
+}
+
 export default function AddFieldScreen() {
   const { colors, isDarkMode } = useTheme();
   const navigation = useNavigation();
@@ -423,6 +477,7 @@ Instructions:
   });
 
   const [existingFieldNames, setExistingFieldNames] = useState<string[]>([]);
+  const [existingFields, setExistingFields] = useState<ExistingField[]>([]);
 
   useEffect(() => {
     const loadFields = async () => {
@@ -432,10 +487,26 @@ Instructions:
           const fields = await dataService.getFields(session.user.id);
           if (fields && Array.isArray(fields)) {
             setExistingFieldNames(fields.map(f => f.name.trim().toLowerCase()));
+            const parsedFields: ExistingField[] = fields.map(f => {
+              let b: MapPoint[] = [];
+              if (f.boundaries) {
+                try {
+                  const p = typeof f.boundaries === 'string' ? JSON.parse(f.boundaries) : f.boundaries;
+                  if (Array.isArray(p)) b = p;
+                } catch (e) {}
+              }
+              return {
+                id: f.id,
+                name: f.name,
+                crop_type: f.crop_type,
+                boundaries: b
+              };
+            }).filter(f => f.boundaries.length >= 3);
+            setExistingFields(parsedFields);
           }
         }
       } catch (e) {
-        console.warn('Error loading existing fields for uniqueness check:', e);
+        console.warn('Error loading existing fields:', e);
       }
     };
     loadFields();
@@ -641,8 +712,25 @@ Instructions:
     }
   };
 
+  const overlappingField = useMemo(() => {
+    if (sorted.length < 3 || existingFields.length === 0) return null;
+    for (const ef of existingFields) {
+      if (checkPolygonsOverlap(sorted, ef.boundaries)) {
+        return ef;
+      }
+    }
+    return null;
+  }, [sorted, existingFields]);
+
   const goToDetails = () => {
     if (points.length < 3) { return; }
+    if (overlappingField) {
+      Alert.alert(
+        '🚫 Overlapping Farm Area Detected',
+        `Your new farm boundary overlaps with your existing mapped farm "${overlappingField.name}".\n\nYou cannot overlap two farms in the same area. Please adjust your corner pins or draw within unmapped land.`
+      );
+      return;
+    }
     setStep('details');
   };
 
@@ -754,6 +842,50 @@ Instructions:
               }
             }}
           >
+            {/* ── Existing Mapped Farms (Shown clearly to prevent spatial overlap) ── */}
+            {existingFields.map((field, idx) => (
+              <React.Fragment key={`existing-farm-${field.id}-${idx}`}>
+                <Polygon
+                  coordinates={field.boundaries}
+                  strokeColor="#2563EB"
+                  fillColor="rgba(37, 99, 235, 0.28)"
+                  strokeWidth={2.5}
+                />
+                {field.boundaries.length > 0 && (
+                  <Marker
+                    coordinate={{
+                      latitude: field.boundaries.reduce((s, p) => s + p.latitude, 0) / field.boundaries.length,
+                      longitude: field.boundaries.reduce((s, p) => s + p.longitude, 0) / field.boundaries.length
+                    }}
+                    anchor={{ x: 0.5, y: 0.5 }}
+                  >
+                    <View style={{
+                      backgroundColor: 'rgba(30, 58, 138, 0.94)',
+                      paddingHorizontal: 9,
+                      paddingVertical: 5,
+                      borderRadius: 10,
+                      borderWidth: 1.5,
+                      borderColor: '#60A5FA',
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
+                      elevation: 4,
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.25,
+                      shadowRadius: 3,
+                    }}>
+                      <Ionicons name="location-sharp" size={12} color="#60A5FA" />
+                      <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>
+                        {field.name}
+                      </Text>
+                    </View>
+                  </Marker>
+                )}
+              </React.Fragment>
+            ))}
+
+            {/* ── Newly Drawn Farm Boundary ── */}
             {points.map((pt, i) => (
               <Marker 
                 key={`${i}-${pt.latitude}-${pt.longitude}`} 
@@ -771,14 +903,60 @@ Instructions:
                   }
                 }}
               >
-                <View style={styles.pin}>
+                <View style={[styles.pin, overlappingField && { backgroundColor: '#DC2626', borderColor: '#FEF2F2' }]}>
                   <Text style={styles.pinTxt}>{i + 1}</Text>
                 </View>
               </Marker>
             ))}
-            {sorted.length >= 3 && <Polygon coordinates={sorted} strokeColor="#4CAF50" fillColor="rgba(76,175,80,0.3)" strokeWidth={2.5} />}
-            {sorted.length >= 2 && <Polyline coordinates={[...sorted, sorted[0]]} strokeColor="#4CAF50" strokeWidth={2.5} />}
+            {sorted.length >= 3 && (
+              <Polygon 
+                coordinates={sorted} 
+                strokeColor={overlappingField ? "#DC2626" : "#4CAF50"} 
+                fillColor={overlappingField ? "rgba(239, 68, 68, 0.42)" : "rgba(76,175,80,0.3)"} 
+                strokeWidth={3} 
+              />
+            )}
+            {sorted.length >= 2 && (
+              <Polyline 
+                coordinates={[...sorted, sorted[0]]} 
+                strokeColor={overlappingField ? "#DC2626" : "#4CAF50"} 
+                strokeWidth={3} 
+              />
+            )}
           </MapView>
+
+          {/* ── Real-Time Overlapping Farm Warning Banner ── */}
+          {overlappingField && (
+            <View style={{
+              position: 'absolute',
+              top: 72,
+              left: 16,
+              right: 16,
+              backgroundColor: '#DC2626',
+              borderRadius: 14,
+              paddingHorizontal: 14,
+              paddingVertical: 10,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+              zIndex: 35,
+              elevation: 8,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.35,
+              shadowRadius: 5,
+            }}>
+              <Ionicons name="warning-sharp" size={24} color="#FFFFFF" />
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>
+                  Overlapping Farm Area Detected!
+                </Text>
+                <Text style={{ color: '#FEE2E2', fontSize: 11, marginTop: 1, fontWeight: '500' }}>
+                  Overlaps with "{overlappingField.name}". Please draw within unmapped land.
+                </Text>
+              </View>
+            </View>
+          )}
 
           {/* Floating Top Control Row (Back Button + Search Bar with Gap) */}
           <View style={{
@@ -1019,13 +1197,15 @@ Instructions:
                 style={{
                   flex: 1,
                   height: 48,
-                  backgroundColor: points.length >= 3 ? colors.brandGreen : colors.border,
+                  backgroundColor: points.length >= 3 
+                    ? (overlappingField ? '#DC2626' : colors.brandGreen) 
+                    : colors.border,
                   borderRadius: 14,
                   flexDirection: 'row',
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: 8,
-                  shadowColor: colors.brandGreen,
+                  shadowColor: overlappingField ? '#DC2626' : colors.brandGreen,
                   shadowOffset: { width: 0, height: 4 },
                   shadowOpacity: points.length >= 3 ? 0.25 : 0,
                   shadowRadius: 6,
@@ -1036,9 +1216,9 @@ Instructions:
                 activeOpacity={0.85}
               >
                 <Text style={{ color: '#FFF', fontSize: 14, fontWeight: '800', letterSpacing: 0.3 }}>
-                  Continue
+                  {overlappingField ? 'Overlapping Farm' : 'Continue'}
                 </Text>
-                <Ionicons name="arrow-forward" size={16} color="#FFF" />
+                <Ionicons name={overlappingField ? "warning" : "arrow-forward"} size={16} color="#FFF" />
               </TouchableOpacity>
 
               {/* Undo Button */}

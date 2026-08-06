@@ -20,6 +20,8 @@ import { useLanguage } from '../../lib/LanguageContext';
 import { useCart } from '../../lib/CartContext';
 import CartModal from '../../components/CartModal';
 import { supabase } from '../../lib/supabase';
+import { useUserAvatar } from '../../hooks/useUserAvatar';
+import UserProfileIcon from '../../components/UserProfileIcon';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.78;
@@ -172,6 +174,7 @@ export default function ProductDetailScreen() {
   const { colors, isDarkMode } = useTheme();
   const { language } = useLanguage();
   const { addToCart, cartCount } = useCart();
+  const { avatarSource } = useUserAvatar();
   const [cartModalVisible, setCartModalVisible] = useState(false);
 
   // Typewriter animation state
@@ -467,14 +470,11 @@ export default function ProductDetailScreen() {
             )}
           </TouchableOpacity>
           
-          <TouchableOpacity style={[styles.profileBtn, { borderColor: isDarkMode ? colors.brandGreen : COLORS.forest600 }]} activeOpacity={0.7}>
-            <Image 
-              source={AVATAR_PEEKING} 
-              style={styles.profilePic} 
-              resizeMode="cover"
-              fadeDuration={0}
-            />
-          </TouchableOpacity>
+          <UserProfileIcon
+            size={36}
+            borderColor={isDarkMode ? colors.brandGreen : COLORS.forest600}
+            onPress={() => navigation.navigate('Main', { screen: 'Settings' })}
+          />
         </View>
       </View>
 
@@ -792,31 +792,16 @@ export default function ProductDetailScreen() {
               addToCart(product);
               Alert.alert(
                 language === 'ne' ? 'झोलामा थपियो!' : 'Added to Cart!',
-                language === 'ne' ? `${product.title} झोलामा जोडिएको छ।` : `${product.title} has been added to your cart.`
+                language === 'ne' ? `${product.title || product.name} झोलामा जोडिएको छ।` : `${product.title || product.name} has been added to your cart.`
               );
             }}
-            style={[styles.cartOutlineBtn, { borderColor: isDarkMode ? colors.brandGreen : COLORS.forest700 }]}
+            style={[styles.buyBtn, { backgroundColor: colors.brandGreen, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 14 }]}
             activeOpacity={0.8}
           >
-            <Ionicons name="bag-add-outline" size={20} color={isDarkMode ? '#81c784' : COLORS.forest700} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={confirmOrder}
-            disabled={orderProcessing}
-            style={[styles.buyBtn, { backgroundColor: colors.brandGreen }]}
-            activeOpacity={0.8}
-          >
-            {orderProcessing ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <>
-                <Ionicons name="cart" size={18} color="#fff" />
-                <Text style={styles.buyBtnText}>
-                  {language === 'ne' ? 'अर्डर गर्नुहोस्' : 'Buy Now'}
-                </Text>
-              </>
-            )}
+            <Ionicons name="cart" size={17} color="#fff" />
+            <Text style={styles.buyBtnText}>
+              {language === 'ne' ? 'कार्टमा थप्नुहोस्' : 'Add to Cart'}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -825,6 +810,7 @@ export default function ProductDetailScreen() {
       <CartModal 
         visible={cartModalVisible} 
         onClose={() => setCartModalVisible(false)} 
+        onOrderSuccess={() => navigation.navigate('Main', { screen: 'Settings', params: { openOrderTracking: true } })}
       />
     </SafeAreaView>
   );

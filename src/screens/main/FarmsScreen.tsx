@@ -46,6 +46,19 @@ import Svg, {
 } from 'react-native-svg';
 
 import { Asset } from 'expo-asset';
+import { useUserAvatar } from '../../hooks/useUserAvatar';
+import UserProfileIcon from '../../components/UserProfileIcon';
+import { 
+  evaluateFieldLifecycle, 
+  updateFieldLifecycleMilestone, 
+  rescheduleMilestoneDate, 
+  clearMilestoneDismissal, 
+  FieldLifecycleState, 
+  InAppNotificationItem 
+} from '../../services/cropLifecycleService';
+import CropLifecycleCheckinModal from '../../components/CropLifecycleCheckinModal';
+import ReschedulePlantingModal from '../../components/ReschedulePlantingModal';
+import InAppNotificationModal from '../../components/InAppNotificationModal';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -98,7 +111,23 @@ interface Field {
   location_name: string | null;
   boundaries: any; // Using any to match Supabase's Json definition
   planting_date: string | null;
+  simulated_date: string | null;
 }
+
+// Resolve the reference "today" for lifecycle math — admin-simulated date if set, otherwise the real current date
+const simulatedTodayFor = (field: { simulated_date?: string | null } | null | undefined): Date | undefined => {
+  if (!field?.simulated_date) return undefined;
+  const d = new Date(field.simulated_date);
+  return isNaN(d.getTime()) ? undefined : d;
+};
+
+// A simulated clock that has reached/passed the planting date means the crop counts as planted
+const isSimulatedPastPlanting = (field: { simulated_date?: string | null; planting_date?: string | null } | null | undefined): boolean => {
+  const sim = simulatedTodayFor(field);
+  if (!sim || !field?.planting_date) return false;
+  const pd = parseLocalDate(field.planting_date);
+  return !isNaN(pd.getTime()) && sim.getTime() >= pd.getTime();
+};
 
 type RootStackParamList = {
   Home: undefined;
@@ -1611,10 +1640,10 @@ const generateConciseAIAdvisorTip = (field: Field | undefined | null, language: 
   }
 
   const crop = field.crop_type || 'Rice';
-  const stageInfo = calculateGrowthStage(crop, field.planting_date, field.status, language);
+  const stageInfo = calculateGrowthStage(crop, field.planting_date, field.status, language, simulatedTodayFor(field));
   const stageName = stageInfo.stageName;
   const healthScore = calculateDynamicHealthScore(field);
-  const isPlanned = field.status === 'planned';
+  const isPlanned = field.status === 'planned' && !isSimulatedPastPlanting(field);
 
   const cropLower = crop.toLowerCase();
   let cropName = 'Rice';
@@ -1727,10 +1756,10 @@ const getStageAwareWaterAdvice = (cropName: string, stageName: string, moisture:
 
 const getPersonalizedAgronomicAnalysis = (field: Field, healthScore: number, language: string): string => {
   const crop = field.crop_type || 'Rice';
-  const stageInfo = calculateGrowthStage(crop, field.planting_date, field.status, language);
+  const stageInfo = calculateGrowthStage(crop, field.planting_date, field.status, language, simulatedTodayFor(field));
   const stageName = stageInfo.stageName;
   const soil = field.soil_type || 'Loam';
-  const isPlanned = field.status === 'planned';
+  const isPlanned = field.status === 'planned' && !isSimulatedPastPlanting(field);
 
   const cropLower = crop.toLowerCase();
   let cropName = 'Rice';
@@ -1762,7 +1791,7 @@ interface GrowthStageInfo {
   stages: { name: string; range: string; isActive: boolean; isCompleted: boolean }[];
 }
 
-const calculateGrowthStage = (cropType: string, plantingDateStr: string | null, status: string | null, lang: string = 'en'): GrowthStageInfo => {
+const calculateGrowthStage = (cropType: string, plantingDateStr: string | null, status: string | null, lang: string = 'en', todayOverride?: Date): GrowthStageInfo => {
   const isNe = lang === 'ne';
 
   const translateStageName = (name: string): string => {
@@ -1798,7 +1827,12 @@ const calculateGrowthStage = (cropType: string, plantingDateStr: string | null, 
     { name: translateStageName('Maturity'), range: 'D.86-120', isActive: false, isCompleted: false },
   ];
 
-  if (!plantingDateStr || status === 'planned') {
+  const simPastPlanting = !!(todayOverride && plantingDateStr && (() => {
+    const pd = parseLocalDate(plantingDateStr);
+    return !isNaN(pd.getTime()) && todayOverride.getTime() >= pd.getTime();
+  })());
+
+  if (!plantingDateStr || (status === 'planned' && !simPastPlanting)) {
     return {
       stageName: isNe ? 'योजना तथा पूर्व-तैयारी' : 'Planning / Pre-Sowing',
       daysPassed: 0,
@@ -1818,9 +1852,9 @@ const calculateGrowthStage = (cropType: string, plantingDateStr: string | null, 
     };
   }
 
-  // Calculate days passed from planting_date to actual current date
+  // Calculate days passed from planting_date to actual current date (or simulated admin date)
   const plantingDate = parseLocalDate(plantingDateStr);
-  const currentDate = new Date(); // Real current date
+  const currentDate = todayOverride ? new Date(todayOverride) : new Date(); // Real current date
   const diffTime = currentDate.getTime() - plantingDate.getTime();
   const daysPassed = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
 
@@ -2523,9 +2557,10 @@ const getSuggestedInputs = (
   cropType: string | undefined, 
   plantingDateStr: string | null | undefined, 
   status: string | null | undefined,
-  lang: string = 'en'
+  lang: string = 'en',
+  todayOverride?: Date
 ) => {
-  const stageInfo = calculateGrowthStage(cropType || 'Rice', plantingDateStr || null, status || null);
+  const stageInfo = calculateGrowthStage(cropType || 'Rice', plantingDateStr || null, status || null, 'en', todayOverride);
   const stageName = stageInfo.stageName;
   const lowerStage = stageName.toLowerCase();
   const crop = (cropType || 'Rice').toLowerCase();
@@ -2829,12 +2864,23 @@ const ADVANCED_MASTERCLASSES: MasterclassTopic[] = [
 ];
 
 const FarmsScreen = () => {
+  const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
   const safeTopMargin = insets.top > 0 ? insets.top : (Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 44);
   const { colors, isDarkMode } = useTheme();
   const { language } = useLanguage();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const isFocused = useIsFocused();
+  const { avatarUrl, avatarSource } = useUserAvatar();
+
+  // ── Crop Lifecycle & In-App Notification System State ──
+  const [lifecycleStates, setLifecycleStates] = useState<FieldLifecycleState[]>([]);
+  const [pendingModalCheckin, setPendingModalCheckin] = useState<FieldLifecycleState | null>(null);
+  const [isCheckinModalVisible, setIsCheckinModalVisible] = useState(false);
+  const [rescheduleTarget, setRescheduleTarget] = useState<FieldLifecycleState | null>(null);
+  const [isRescheduleModalVisible, setIsRescheduleModalVisible] = useState(false);
+  const [inAppNotifications, setInAppNotifications] = useState<InAppNotificationItem[]>([]);
+  const [isNotifModalVisible, setIsNotifModalVisible] = useState(false);
+  const [dbProducts, setDbProducts] = useState<any[]>([]);
 
   // Local translations dictionary for home screen updates
   const localT = {
@@ -3195,13 +3241,8 @@ const FarmsScreen = () => {
     }
   };
 
-  const withTimeout = <T extends unknown>(promise: Promise<T> | PromiseLike<T>, timeoutMs = 5000): Promise<T> => {
-    return Promise.race([
-      Promise.resolve(promise) as Promise<T>,
-      new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new Error('Connection timed out. Please check your network.')), timeoutMs)
-      )
-    ]);
+  const withTimeout = <T extends unknown>(promise: Promise<T> | PromiseLike<T>): Promise<T> => {
+    return Promise.resolve(promise) as Promise<T>;
   };
 
   const fetchProfileAndFields = async (isRefreshing = false) => {
@@ -3237,10 +3278,25 @@ const FarmsScreen = () => {
         );
 
         if (fieldsError) throw fieldsError;
-        setFields(fieldsData || []);
-        if (fieldsData && fieldsData.length > 0) {
-          const locs = fieldsData.map((f: any) => f.location_name).filter(Boolean);
+        const targetFields = fieldsData || [];
+        setFields(targetFields);
+        if (targetFields.length > 0) {
+          evaluateFieldLifecycle(targetFields).then(({ lifecycleStates: lStates, pendingModalCheckin: pCheckin, notifications: notifs }) => {
+            setLifecycleStates(lStates);
+            setInAppNotifications(notifs);
+            if (pCheckin) {
+              setPendingModalCheckin(pCheckin);
+              setIsCheckinModalVisible(true);
+            }
+          });
+          const locs = targetFields.map((f: any) => f.location_name).filter(Boolean);
           preFetchAllSoilTelemetry(locs).catch(() => {});
+        }
+
+        // Fetch DB Marketplace Products for field recommendations
+        const { data: prodData } = await (supabase as any).from('products').select('*');
+        if (prodData && prodData.length > 0) {
+          setDbProducts(prodData);
         }
       }
     } catch (error: any) {
@@ -3266,6 +3322,17 @@ const FarmsScreen = () => {
       fetchProfileAndFields();
     }
   }, [isFocused]);
+
+  // "Not Yet" on a check-in: open the reschedule calendar for the milestone so the
+  // farmer picks a new date within the valid period. The check-in re-asks until confirmed.
+  const handleCheckinNotYet = async () => {
+    const checkin = pendingModalCheckin;
+    setIsCheckinModalVisible(false);
+    if (checkin && checkin.pendingCheckin) {
+      setRescheduleTarget(checkin);
+      setIsRescheduleModalVisible(true);
+    }
+  };
 
   // Manage field deletion
   const handleDeleteField = (fieldId: string, fieldName: string) => {
@@ -3324,25 +3391,34 @@ const FarmsScreen = () => {
 
         {/* Right section: Notifications + Profile */}
         <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.notificationBtn} activeOpacity={0.7}>
+          <TouchableOpacity 
+            style={styles.notificationBtn} 
+            activeOpacity={0.7}
+            onPress={() => setIsNotifModalVisible(true)}
+          >
             <Ionicons name="notifications-outline" size={22} color={COLORS.forest900} />
-            <View style={styles.notificationBadge} />
+            {inAppNotifications.length > 0 && <View style={styles.notificationBadge} />}
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.profileBtn} activeOpacity={0.7}>
-            <Image 
-              source={AVATAR_PEEKING} 
-              style={styles.profilePic} 
-              resizeMode="cover"
-              fadeDuration={0}
-            />
-          </TouchableOpacity>
+          <UserProfileIcon
+            size={36}
+            onPress={() => navigation.navigate('SettingsTab' as any)}
+          />
         </View>
       </View>
 
       {/* Main Content Area */}
       <Animated.ScrollView 
         scrollEnabled={scrollEnabled}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => fetchProfileAndFields(true)}
+            colors={[colors.brandGreen]}
+            tintColor={colors.brandGreen}
+            progressBackgroundColor={COLORS.white}
+          />
+        }
         contentContainerStyle={[
           styles.mainScrollContent,
           fields.length === 0 && { flexGrow: 1, justifyContent: 'center', alignItems: 'center' }
@@ -3549,17 +3625,17 @@ const FarmsScreen = () => {
                   </Text>
                 </TouchableOpacity>
 
-                {/* Shortcut 3: Soil Reports */}
+                {/* Shortcut 3: Sell Harvest */}
                 <TouchableOpacity 
                   style={styles.shortcutItem} 
                   activeOpacity={0.7}
-                  onPress={() => (navigation as any).navigate('SoilReport')}
+                  onPress={() => (navigation as any).navigate('SellHarvest')}
                 >
                   <View style={[styles.shortcutIconCircle, { backgroundColor: '#e1f0fa' }]}>
-                    <Ionicons name="document-text-outline" size={22} color="#2d7bb6" />
+                    <Ionicons name="pricetag-outline" size={22} color="#2d7bb6" />
                   </View>
                   <Text style={styles.shortcutLabel} numberOfLines={2}>
-                    {localT[language]?.soilReports || 'Soil Reports'}
+                    {language === 'ne' ? 'बिक्री गर्नुहोस्' : 'Sell Harvest'}
                   </Text>
                 </TouchableOpacity>
 
@@ -4051,7 +4127,7 @@ const FarmsScreen = () => {
                     <Ionicons name="calendar-outline" size={20} color={colors.brandGreen} />
                     <View style={styles.detailRowText}>
                       <Text style={[styles.detailLabel, { color: colors.secondaryText }]}>
-                        {selectedField.status === 'planned' 
+                        {selectedField.status === 'planned' && !isSimulatedPastPlanting(selectedField)
                           ? (language === 'ne' ? 'लक्षित रोपेको मिति' : 'Target Sowing Date') 
                           : (language === 'ne' ? 'रोपेको मिति' : 'Planted Date')}
                       </Text>
@@ -4105,7 +4181,7 @@ const FarmsScreen = () => {
 
               {/* 3. Soil Moisture & Water Level Progress Card */}
               {weatherData && weatherData.soilMoisture !== undefined && (() => {
-                const stageInfo = calculateGrowthStage(selectedField.crop_type, selectedField.planting_date, selectedField.status, language);
+                const stageInfo = calculateGrowthStage(selectedField.crop_type, selectedField.planting_date, selectedField.status, language, simulatedTodayFor(selectedField));
                 const waterAdvice = getStageAwareWaterAdvice(
                   selectedField.crop_type, 
                   stageInfo.stageName, 
@@ -4205,7 +4281,7 @@ const FarmsScreen = () => {
 
               {/* Crop Growth Timeline Section */}
               {(() => {
-                const stageInfo = calculateGrowthStage(selectedField.crop_type, selectedField.planting_date, selectedField.status, language);
+                const stageInfo = calculateGrowthStage(selectedField.crop_type, selectedField.planting_date, selectedField.status, language, simulatedTodayFor(selectedField));
                 
                 // Dynamic speech message for crop stage (Uses AVATAR_WAVING mascot like greeting card)
                 const stageMascot = AVATAR_WAVING;
@@ -4232,6 +4308,9 @@ const FarmsScreen = () => {
                           {language === 'ne' ? 'बाली वृद्धि यात्रा' : 'CROP GROWTH JOURNEY'}
                         </Text>
                       </View>
+                      
+
+
                       <View style={{ backgroundColor: isDarkMode ? 'rgba(76,175,80,0.2)' : '#eaf6f0', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: colors.brandGreen }}>
                         <Text style={{ fontSize: 10, fontWeight: '800', color: colors.brandGreen, letterSpacing: 0.5 }}>
                           {language === 'ne' 
@@ -4468,12 +4547,14 @@ const FarmsScreen = () => {
                 );
               })()}
 
-                    {/* Suggested Fertilizer & Agricultural Inputs Section */}
+                    {/* Suggested Fertilizer & Agricultural Inputs Section from Database */}
                     {(() => {
-                      const { inputs, stageName: currentStageName } = getSuggestedInputs(selectedField.crop_type, selectedField.planting_date, selectedField.status, language);
+                      const { inputs: fallbackInputs, stageName: currentStageName } = getSuggestedInputs(selectedField.crop_type, selectedField.planting_date, selectedField.status, language, simulatedTodayFor(selectedField));
                       
+                      const displayProducts = dbProducts.length > 0 ? dbProducts : fallbackInputs;
+
                       const getCategoryColor = (category: string) => {
-                        const cat = category.toUpperCase();
+                        const cat = (category || '').toUpperCase();
                         if (cat.includes('FERTILIZER') || cat.includes('मल')) return { bg: isDarkMode ? 'rgba(76,175,80,0.18)' : '#eaf6f0', text: isDarkMode ? '#81c784' : '#2e7d32' };
                         if (cat.includes('SEEDS') || cat.includes('TUBERS') || cat.includes('बीउ')) return { bg: isDarkMode ? 'rgba(255,152,0,0.18)' : '#fff3e0', text: isDarkMode ? '#ffb74d' : '#e65100' };
                         if (cat.includes('PEST') || cat.includes('INSECTICIDE') || cat.includes('FUNGICIDE') || cat.includes('HERBICIDE') || cat.includes('कीटनाशक') || cat.includes('फङ्गीसाइड') || cat.includes('घाँसनाशक')) return { bg: isDarkMode ? 'rgba(244,67,54,0.18)' : '#ffebee', text: isDarkMode ? '#e57373' : '#c62828' };
@@ -4498,7 +4579,7 @@ const FarmsScreen = () => {
                                 <Ionicons name="cart" size={15} color={colors.brandGreen} />
                               </View>
                               <Text style={{ fontSize: 13, fontWeight: '800', color: colors.text, letterSpacing: 0.3 }}>
-                                {language === 'ne' ? 'सिफारिस गरिएका सामग्रीहरू' : 'RECOMMENDED INPUTS'}
+                                {language === 'ne' ? 'सिफारिस गरिएका सामग्रीहरू' : 'RECOMMENDED MARKETPLACE INPUTS'}
                               </Text>
                             </View>
                             
@@ -4522,17 +4603,22 @@ const FarmsScreen = () => {
 
                           <Text style={{ fontSize: 11.5, color: colors.secondaryText, marginBottom: 16, lineHeight: 16 }}>
                             {language === 'ne' 
-                              ? `उत्पादन बढाउन ${currentStageName} चरणमा ${selectedField.crop_type || 'बाली'} को लागि सिफारिस गरिएका सामग्रीहरू।`
-                              : `Inputs matched for ${selectedField.crop_type || 'Crop'} during the ${currentStageName} phase to maximize growth & yield.`}
+                              ? `डेटाबेसबाट ${currentStageName} चरणमा ${selectedField.crop_type || 'बाली'} को लागि सिफारिस गरिएका बजार सामग्रीहरू।`
+                              : `Live database marketplace products matched for ${selectedField.crop_type || 'Crop'} during the ${currentStageName} phase.`}
                           </Text>
 
-                          {/* Horizontal Input Cards */}
+                          {/* Horizontal Input Cards in Marketplace Design */}
                           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row', paddingBottom: 6 }}>
-                            {inputs.map((item) => {
-                              const catStyle = getCategoryColor(item.category);
+                            {displayProducts.map((item: any) => {
+                              const catStyle = getCategoryColor(item.category || 'General');
+                              const titleText = item.name || item.title || 'Agri Supply';
+                              const priceDisplay = typeof item.price === 'number' ? `NPR ${item.price.toLocaleString()}` : (item.price?.startsWith('NPR') ? item.price : `NPR ${item.price || '1,200'}`);
+                              const unitText = item.unit || item.dosage || 'Standard Pack';
+                              const emojiSymbol = item.emoji || (item.category?.includes('Seed') ? '🌾' : item.category?.includes('Fert') ? '🧪' : '🌱');
+
                               return (
-                                <View key={item.id} style={{ 
-                                  width: 235, 
+                                <View key={item.id || item.name} style={{ 
+                                  width: 240, 
                                   backgroundColor: isDarkMode ? '#172218' : '#fcfdfe', 
                                   borderRadius: 20, 
                                   padding: 16, 
@@ -4547,7 +4633,7 @@ const FarmsScreen = () => {
                                   justifyContent: 'space-between'
                                 }}>
                                   <View>
-                                    {/* Header Row: Emoji + Category Tag */}
+                                    {/* Header Row: Emoji + Category Glass Tag */}
                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                                       <View style={{ 
                                         width: 48, 
@@ -4559,7 +4645,7 @@ const FarmsScreen = () => {
                                         borderWidth: 1,
                                         borderColor: isDarkMode ? '#334c36' : '#d2e9d7'
                                       }}>
-                                        <Text style={{ fontSize: 24 }}>{item.emoji}</Text>
+                                        <Text style={{ fontSize: 24 }}>{emojiSymbol}</Text>
                                       </View>
 
                                       <View style={{ 
@@ -4569,17 +4655,17 @@ const FarmsScreen = () => {
                                         borderRadius: 8 
                                       }}>
                                         <Text style={{ fontSize: 9, fontWeight: '800', color: catStyle.text, letterSpacing: 0.4 }}>
-                                          {item.category.toUpperCase()}
+                                          {(item.category || 'MARKETPLACE').toUpperCase()}
                                         </Text>
                                       </View>
                                     </View>
 
                                     {/* Title */}
                                     <Text style={{ fontSize: 14, fontWeight: '800', color: colors.text, marginBottom: 6, lineHeight: 19 }} numberOfLines={2}>
-                                      {item.title}
+                                      {titleText}
                                     </Text>
 
-                                    {/* Dosage Pill */}
+                                    {/* Unit / Pack Pill */}
                                     <View style={{ 
                                       flexDirection: 'row', 
                                       alignItems: 'center', 
@@ -4591,9 +4677,9 @@ const FarmsScreen = () => {
                                       marginBottom: 10,
                                       alignSelf: 'flex-start'
                                     }}>
-                                      <Ionicons name="time-outline" size={12} color={colors.secondaryText} />
+                                      <Ionicons name="cube-outline" size={12} color={colors.secondaryText} />
                                       <Text style={{ fontSize: 11, fontWeight: '600', color: colors.secondaryText }} numberOfLines={1}>
-                                        {item.dosage}
+                                        {unitText}
                                       </Text>
                                     </View>
                                   </View>
@@ -4601,14 +4687,17 @@ const FarmsScreen = () => {
                                   <View>
                                     {/* Price */}
                                     <View style={{ flexDirection: 'row', alignItems: 'baseline', marginBottom: 12 }}>
-                                      <Text style={{ fontSize: 14, fontWeight: '900', color: isDarkMode ? '#81c784' : '#2e7d32' }}>
-                                        {item.price}
+                                      <Text style={{ fontSize: 15, fontWeight: '900', color: isDarkMode ? '#81c784' : '#2e7d32' }}>
+                                        {priceDisplay}
                                       </Text>
                                     </View>
 
-                                    {/* Buy Button */}
+                                    {/* View Details Button */}
                                     <TouchableOpacity 
-                                      onPress={() => handleBuyNow(item)}
+                                      onPress={() => {
+                                        setSelectedField(null);
+                                        navigation.navigate('ProductDetail' as any, { product: { ...item, title: titleText, price: priceDisplay } });
+                                      }}
                                       style={{ 
                                         backgroundColor: colors.brandGreen, 
                                         borderRadius: 12, 
@@ -4625,9 +4714,9 @@ const FarmsScreen = () => {
                                       }}
                                       activeOpacity={0.8}
                                     >
-                                      <Ionicons name="cart-outline" size={15} color="#fff" />
+                                      <Ionicons name="eye-outline" size={15} color="#fff" />
                                       <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>
-                                        {language === 'ne' ? 'अर्डर गर्नुहोस्' : 'Buy Now'}
+                                        {language === 'ne' ? 'हेर्नुहोस्' : 'View'}
                                       </Text>
                                     </TouchableOpacity>
                                   </View>
@@ -4682,6 +4771,71 @@ const FarmsScreen = () => {
         colors={colors}
         isDarkMode={isDarkMode}
         calculateDynamicHealthScore={calculateDynamicHealthScore}
+      />
+
+      {/* ── Crop Lifecycle Check-in Modal Popup ── */}
+      <CropLifecycleCheckinModal
+        visible={isCheckinModalVisible}
+        item={pendingModalCheckin}
+        onConfirm={async () => {
+          if (pendingModalCheckin && pendingModalCheckin.pendingCheckin) {
+            await updateFieldLifecycleMilestone(
+              pendingModalCheckin.id,
+              pendingModalCheckin.pendingCheckin.type,
+              'confirm'
+            );
+          }
+          setIsCheckinModalVisible(false);
+          await fetchProfileAndFields();
+        }}
+        onDismiss={handleCheckinNotYet}
+        onNotYet={handleCheckinNotYet}
+      />
+
+      {/* ── "When are you going to plant / weed / harvest?" Reschedule Modal ── */}
+      <ReschedulePlantingModal
+        visible={isRescheduleModalVisible}
+        fieldName={rescheduleTarget?.name}
+        cropType={rescheduleTarget?.crop_type}
+        plantingDate={rescheduleTarget?.planting_date}
+        currentDate={
+          rescheduleTarget?.pendingCheckin?.type === 'confirm_weeding'
+            ? rescheduleTarget.weeding_date
+            : rescheduleTarget?.pendingCheckin?.type === 'confirm_harvest'
+              ? rescheduleTarget.harvest_date
+              : rescheduleTarget?.planting_date
+        }
+        milestoneType={rescheduleTarget?.pendingCheckin?.type || 'confirm_planting'}
+        simulatedDate={rescheduleTarget?.simulated_date}
+        onSave={async (dateStr) => {
+          if (rescheduleTarget && rescheduleTarget.pendingCheckin) {
+            await rescheduleMilestoneDate(rescheduleTarget.id, rescheduleTarget.pendingCheckin.type, dateStr);
+          }
+          setIsRescheduleModalVisible(false);
+          setRescheduleTarget(null);
+          await fetchProfileAndFields();
+        }}
+        onCancel={async () => {
+          if (rescheduleTarget && rescheduleTarget.pendingCheckin) {
+            const stage =
+              rescheduleTarget.pendingCheckin.type === 'confirm_planting'
+                ? 'plant'
+                : rescheduleTarget.pendingCheckin.type === 'confirm_weeding'
+                  ? 'weed'
+                  : 'harvest';
+            await clearMilestoneDismissal(stage, rescheduleTarget.id);
+          }
+          setIsRescheduleModalVisible(false);
+          setRescheduleTarget(null);
+          await fetchProfileAndFields();
+        }}
+      />
+
+      {/* ── In-App Notifications Modal Center ── */}
+      <InAppNotificationModal
+        visible={isNotifModalVisible}
+        notifications={inAppNotifications}
+        onClose={() => setIsNotifModalVisible(false)}
       />
     </SafeAreaView>
   );

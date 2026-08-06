@@ -91,7 +91,6 @@ export interface TranslationDictionary {
     logout: string;
     editProfile: string;
     changePassword: string;
-    darkMode: string;
     notifications: string;
     units: string;
     unitsValue: string;
@@ -106,6 +105,7 @@ export interface TranslationDictionary {
     about: string;
     signOut: string;
     footerText: string;
+    memberSince: string;
     fullName: string;
     fullNamePlaceholder: string;
     username: string;
@@ -417,7 +417,6 @@ export const translations: Record<'en' | 'ne', TranslationDictionary> = {
       logout: 'Log Out',
       editProfile: 'Edit Profile',
       changePassword: 'Change Password',
-      darkMode: 'Dark Mode',
       notifications: 'Notifications',
       units: 'Units',
       unitsValue: 'Bigha / Kattha',
@@ -432,6 +431,7 @@ export const translations: Record<'en' | 'ne', TranslationDictionary> = {
       about: 'About',
       signOut: 'Sign Out',
       footerText: 'Avani v2.1.0 • Made with ❤️ for Nepalese farmers',
+      memberSince: 'Member Since',
       fullName: 'Full Name',
       fullNamePlaceholder: 'Enter your full name',
       username: 'Username',
@@ -741,7 +741,6 @@ export const translations: Record<'en' | 'ne', TranslationDictionary> = {
       logout: 'बाहिर निस्कनुहोस्',
       editProfile: 'प्रोफाइल सम्पादन',
       changePassword: 'पासवर्ड परिवर्तन गर्नुहोस्',
-      darkMode: 'डार्क मोड',
       notifications: 'सूचनाहरू',
       units: 'एकाइहरू',
       unitsValue: 'विघा / कठ्ठा',
@@ -756,6 +755,7 @@ export const translations: Record<'en' | 'ne', TranslationDictionary> = {
       about: 'हाम्रोबारे',
       signOut: 'बाहिर निस्कनुहोस्',
       footerText: 'अवानी v2.1.0 • नेपाली कृषकहरूका लागि ❤️ सँग बनाइएको',
+      memberSince: 'सदस्यदेखि',
       fullName: 'पूरा नाम',
       fullNamePlaceholder: 'आफ्नो पूरा नाम प्रविष्ट गर्नुहोस्',
       username: 'प्रयोगकर्ता नाम',

@@ -123,14 +123,7 @@ export async function syncCachedFieldsFromServer(userId: string) {
   }
 }
 
-// ── Network Connection Listener Setup ──
+// ── Network Connection Listener Setup (Postponed / Disabled) ──
 export function initNetInfoSyncListener() {
-  NetInfo.addEventListener(state => {
-    if (state.isConnected && state.isInternetReachable !== false) {
-      console.log('Device returned online. Triggering database sync...');
-      processSyncQueue();
-    } else {
-      console.log('Device went offline. Pausing synchronization.');
-    }
-  });
+  // Offline sync listener postponed for direct online database connectivity
 }

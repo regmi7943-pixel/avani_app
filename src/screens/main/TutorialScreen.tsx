@@ -23,6 +23,8 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../lib/ThemeContext';
 import { useLanguage } from '../../lib/LanguageContext';
 import { supabase } from '../../lib/supabase';
+import { useUserAvatar } from '../../hooks/useUserAvatar';
+import UserProfileIcon from '../../components/UserProfileIcon';
 import { fetchGoogleYouTubeVideos, YouTubeFarmingItem } from '../../lib/youtubeService';
 import { getDailyGrokVideoRecommendation, GrokMatchedVideoResult } from '../../lib/grokVideoRecommender';
 import { filterYouTubeVideosWithGrokAI } from '../../lib/grokVideoCurator';
@@ -45,6 +47,55 @@ function getVideoId(youtubeId?: string, rawUrl?: string): string {
     if (match && match[1]) id = match[1];
   }
   return id || 'L2zFX4uWFic';
+}
+
+// Tutorial screen only: strict detection of the 5 core crops so generic
+// YouTube results (tomato, cucumber, etc.) never flood the screen.
+const CORE_CROP_KEYWORDS: { crop: 'rice' | 'maize' | 'wheat' | 'potato' | 'mustard'; labelEn: string; labelNe: string; regex: RegExp }[] = [
+  { crop: 'maize', labelEn: '🌽 Maize', labelNe: '🌽 मकै खेती', regex: /maize|\bcorn\b|\bमकै\b/ },
+  { crop: 'wheat', labelEn: '🌾 Wheat', labelNe: '🌾 गहुँ खेती', regex: /wheat|\bगहुँ\b/ },
+  { crop: 'potato', labelEn: '🥔 Potato', labelNe: '🥔 आलु खेती', regex: /potato|\bआलु\b/ },
+  { crop: 'mustard', labelEn: '🟡 Mustard', labelNe: '🟡 तोरी खेती', regex: /mustard|canola|\bतोरी\b|\bरायो\b/ },
+  { crop: 'rice', labelEn: '🌾 Rice / Paddy', labelNe: '🌾 धान खेती', regex: /rice|paddy|\bधान\b|\bचामल\b/ },
+];
+
+function detectCoreCrop(item: YouTubeFarmingItem): 'rice' | 'maize' | 'wheat' | 'potato' | 'mustard' | null {
+  const text = `${item.titleEn || ''} ${item.titleNe || ''} ${item.subtitleEn || ''} ${item.subtitleNe || ''}`.toLowerCase();
+  for (const def of CORE_CROP_KEYWORDS) {
+    if (def.regex.test(text)) return def.crop;
+  }
+  return null;
+}
+
+// Re-classify cropType from the actual video text and drop non-core-crop
+// videos when strict mode is on (default browse). Search results keep all
+// vetted videos since the user explicitly asked for them.
+function sanitizeCoreCropVideos(items: YouTubeFarmingItem[], strict: boolean): YouTubeFarmingItem[] {
+  return items
+    .map((item) => {
+      const detected = detectCoreCrop(item);
+      if (!detected) return strict ? null : item;
+      const cropDef = CORE_CROP_KEYWORDS.find(c => c.crop === detected)!;
+      return { ...item, cropType: detected, cropNameEn: cropDef.labelEn, cropNameNe: cropDef.labelNe } as YouTubeFarmingItem;
+    })
+    .filter((v): v is YouTubeFarmingItem => v !== null);
+}
+
+// Tutorial screen only: short, high-volume queries per core crop (the old
+// long combined query returns only ~7 results total on YouTube).
+const BROWSE_CROP_QUERIES: Record<string, string> = {
+  rice: 'rice paddy farming nepal धान खेती',
+  maize: 'maize corn farming nepal मकै खेती',
+  wheat: 'wheat farming nepal गहुँ खेती',
+  potato: 'potato farming nepal आलु खेती',
+  mustard: 'mustard farming nepal तोरी खेती',
+};
+
+function buildTutorialQuery(cropFilter: string): string {
+  if (cropFilter !== 'all' && BROWSE_CROP_QUERIES[cropFilter]) {
+    return BROWSE_CROP_QUERIES[cropFilter];
+  }
+  return 'nepal farming कृषि खेती';
 }
 
 const SkeletonHeroCard = ({ isDarkMode }: { isDarkMode: boolean }) => {
@@ -573,10 +624,12 @@ export default function TutorialScreen() {
   const { colors, isDarkMode } = useTheme();
   const { language } = useLanguage();
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
+  const { avatarUrl, avatarSource } = useUserAvatar();
 
   const [selectedCrop, setSelectedCrop] = useState<string>('all');
   const [selectedTopic, setSelectedTopic] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [activeGuideModal, setActiveGuideModal] = useState<CropGuideItem | null>(null);
   const [isPlayingVideo, setIsPlayingVideo] = useState(false);
 
@@ -613,20 +666,64 @@ export default function TutorialScreen() {
   const [nextPageToken, setNextPageToken] = useState<string>('');
   const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
 
+  // Debounce the search box so we don't hit YouTube + Groq APIs on every keystroke
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   // Fetch live videos from Google YouTube Data API v3 for the 5 selected crops (Fast 25-Video Batch)
   useEffect(() => {
     preloadWakeupBackend();
     async function loadGoogleYouTubeVideos() {
       setIsLoadingGoogle(true);
-      console.log(`[TutorialScreen UI] Requesting YouTube videos | Selected Crop: "${selectedCrop}" | Search Query: "${searchQuery}"`);
+      const fetchQuery = debouncedSearch.trim() ? debouncedSearch.trim() : buildTutorialQuery(selectedCrop);
+      console.log(`[TutorialScreen UI] Requesting YouTube videos | Selected Crop: "${selectedCrop}" | Search Query: "${fetchQuery}"`);
       try {
-        const res = await fetchGoogleYouTubeVideos(selectedCrop, searchQuery);
-        if (res && res.items && res.items.length > 0) {
+        const rawItems: YouTubeFarmingItem[] = [];
+        const seenIds = new Set<string>();
+        let pageToken = '';
+        const isBrowsing = !debouncedSearch.trim();
+
+        if (isBrowsing && selectedCrop === 'all') {
+          // Browse mode: pull one focused page per core crop and merge for volume
+          for (const crop of Object.keys(BROWSE_CROP_QUERIES)) {
+            const res = await fetchGoogleYouTubeVideos(crop, BROWSE_CROP_QUERIES[crop], '');
+            if (!res || !res.items) continue;
+            for (const item of res.items) {
+              if (item && item.id && !seenIds.has(item.id)) {
+                seenIds.add(item.id);
+                rawItems.push(item);
+              }
+            }
+            if (rawItems.length >= 50) break;
+          }
+        } else {
+          // Single crop tab or search: paginate the focused query
+          const fetchQuery = isBrowsing ? buildTutorialQuery(selectedCrop) : debouncedSearch.trim();
+          let pagesFetched = 0;
+          do {
+            const res = await fetchGoogleYouTubeVideos(selectedCrop, fetchQuery, pageToken);
+            if (!res || !res.items || res.items.length === 0) break;
+            for (const item of res.items) {
+              if (item && item.id && !seenIds.has(item.id)) {
+                seenIds.add(item.id);
+                rawItems.push(item);
+              }
+            }
+            pageToken = res.nextPageToken || '';
+            pagesFetched++;
+          } while (pageToken && pagesFetched < 4 && rawItems.length < 40);
+        }
+
+        if (rawItems.length > 0) {
           // Pass raw YouTube videos through Grok AI Curator for strict title relevance filtering
-          const vettedVideos = await filterYouTubeVideosWithGrokAI(res.items);
-          console.log(`[TutorialScreen UI] Loaded ${vettedVideos.length} Grok AI-vetted YouTube videos into screen state.`);
-          setGoogleVideos(vettedVideos);
-          setNextPageToken(res.nextPageToken || '');
+          const vettedVideos = await filterYouTubeVideosWithGrokAI(rawItems);
+          // Keep only core-crop videos when browsing (drop tomato & other vegetables); keep all when searching
+          const sanitized = sanitizeCoreCropVideos(vettedVideos, isBrowsing);
+          console.log(`[TutorialScreen UI] Loaded ${sanitized.length} Grok AI-vetted YouTube videos into screen state.`);
+          setGoogleVideos(sanitized);
+          setNextPageToken(pageToken);
         } else {
           console.warn('[TutorialScreen UI] YouTube API returned empty list, using fallback videos.');
         }
@@ -637,15 +734,17 @@ export default function TutorialScreen() {
       }
     }
     loadGoogleYouTubeVideos();
-  }, [selectedCrop, searchQuery]);
+  }, [selectedCrop, debouncedSearch]);
 
   async function handleLoadMore() {
     if (isLoadingMore || !nextPageToken) return;
     setIsLoadingMore(true);
     try {
-      const res = await fetchGoogleYouTubeVideos(selectedCrop, searchQuery, nextPageToken);
+      const fetchQuery = debouncedSearch.trim() ? debouncedSearch.trim() : buildTutorialQuery(selectedCrop);
+      const res = await fetchGoogleYouTubeVideos(selectedCrop, fetchQuery, nextPageToken);
       if (res && res.items && res.items.length > 0) {
-        setGoogleVideos(prev => [...prev, ...res.items]);
+        const sanitized = sanitizeCoreCropVideos(res.items, !debouncedSearch.trim());
+        setGoogleVideos(prev => [...prev, ...sanitized]);
         setNextPageToken(res.nextPageToken || '');
       }
     } catch (err) {
@@ -816,14 +915,11 @@ export default function TutorialScreen() {
             <View style={styles.notificationBadge} />
           </TouchableOpacity>
           
-          <TouchableOpacity style={[styles.profileBtn, { borderColor: colors.brandGreen }]} activeOpacity={0.7}>
-            <Image 
-              source={require('../../../assets/images/avatar_peeking_cropped.png')} 
-              style={styles.profilePic} 
-              resizeMode="cover"
-              fadeDuration={0}
-            />
-          </TouchableOpacity>
+          <UserProfileIcon
+            size={36}
+            borderColor={colors.brandGreen}
+            onPress={() => navigation.navigate('SettingsTab' as any)}
+          />
         </View>
       </View>
 

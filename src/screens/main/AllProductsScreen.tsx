@@ -558,7 +558,11 @@ export default function AllProductsScreen() {
       )}
 
       {/* Cart Drawer */}
-      <CartModal visible={cartModalVisible} onClose={() => setCartModalVisible(false)} />
+      <CartModal
+        visible={cartModalVisible}
+        onClose={() => setCartModalVisible(false)}
+        onOrderSuccess={() => navigation.navigate('Main', { screen: 'Settings', params: { openOrderTracking: true } })}
+      />
     </SafeAreaView>
   );
 }

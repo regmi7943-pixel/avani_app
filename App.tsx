@@ -26,6 +26,7 @@ import AllProductsScreen from './src/screens/main/AllProductsScreen';
 import SoilReportScreen from './src/screens/main/SoilReportScreen';
 import CropHistoryScreen from './src/screens/main/CropHistoryScreen';
 import MasterclassDetailScreen from './src/screens/main/MasterclassDetailScreen';
+import SellHarvestScreen from './src/screens/main/SellHarvestScreen';
 import { ThemeProvider } from './src/lib/ThemeContext';
 import { LanguageProvider } from './src/lib/LanguageContext';
 import { CartProvider } from './src/lib/CartContext';
@@ -107,7 +108,8 @@ export default function App() {
     };
 
     prepareApp();
-    initNetInfoSyncListener();
+    // Disabled offline NetInfo sync engine listener for direct online DB connectivity
+    // initNetInfoSyncListener();
 
     // Handle deep links when the app is already open
     const handleDeepLink = async (event: { url: string }) => {
@@ -172,6 +174,7 @@ export default function App() {
                       <Stack.Screen name="SoilReport" component={SoilReportScreen} />
                       <Stack.Screen name="CropHistory" component={CropHistoryScreen} />
                       <Stack.Screen name="MasterclassDetail" component={MasterclassDetailScreen} />
+                      <Stack.Screen name="SellHarvest" component={SellHarvestScreen} />
                     </>
                   )}
                 </>

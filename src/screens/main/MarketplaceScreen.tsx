@@ -21,6 +21,8 @@ import { useLanguage } from '../../lib/LanguageContext';
 import { useCart } from '../../lib/CartContext';
 import { supabase } from '../../lib/supabase';
 import CartModal from '../../components/CartModal';
+import { useUserAvatar } from '../../hooks/useUserAvatar';
+import UserProfileIcon from '../../components/UserProfileIcon';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CAROUSEL_WIDTH = SCREEN_WIDTH - 32;
@@ -62,7 +64,7 @@ const getCardImageSource = (item: any) => {
   if (url && typeof url === 'string' && url.trim().length > 10 && url.startsWith('http') && !isDarkPlaceholderUrl(url)) {
     return { uri: url.trim() };
   }
-  return getCategoryBg(item?.category);
+  return undefined;
 };
 
 const COLORS = {
@@ -79,109 +81,8 @@ const COLORS = {
   white: '#ffffff',
 };
 
-const FALLBACK_PRODUCTS = [
-  {
-    id: 'prod-1',
-    emoji: '🌾',
-    title: 'Hardinath-1 Certified Paddy Seeds',
-    category: 'SEEDS',
-    price: 'NPR 1,450 / Pack',
-    dosage: '40-50 kg / Hectare',
-    description: 'High germination (85%+) certified paddy seeds for Terai & Inner Terai.',
-  },
-  {
-    id: 'prod-2',
-    emoji: '🌽',
-    title: 'Rampur Hybrid-10 Maize Seeds',
-    category: 'SEEDS',
-    price: 'NPR 1,200 / Pack',
-    dosage: '20 kg / Hectare',
-    description: 'High yielding hybrid maize seeds resistant to leaf blight.',
-  },
-  {
-    id: 'prod-3',
-    emoji: '🧪',
-    title: 'DAP 18-46-0 Basal Fertilizer',
-    category: 'FERTILIZER',
-    price: 'NPR 2,400 / Bag (50kg)',
-    dosage: '100-120 kg / Hectare',
-    description: 'Essential nitrogen & phosphorus basal fertilizer for root initiation.',
-  },
-  {
-    id: 'prod-4',
-    emoji: '💧',
-    title: 'Urea 46% N Top-Dress Fertilizer',
-    category: 'FERTILIZER',
-    price: 'NPR 1,100 / Bag (50kg)',
-    dosage: '120-150 kg / Hectare',
-    description: 'High concentration nitrogen top-dressing fertilizer for vegetative growth.',
-  },
-  {
-    id: 'prod-5',
-    emoji: '⚡',
-    title: 'Zinc Sulphate 21% Micronutrient',
-    category: 'MICRONUTRIENT',
-    price: 'NPR 450 / Pack (5kg)',
-    dosage: '25 kg / Hectare',
-    description: 'Prevents Khaira disease in paddy and corrects yellowing leaves.',
-  },
-  {
-    id: 'prod-6',
-    emoji: '🎒',
-    title: '16L Heavy Duty Battery Sprayer',
-    category: 'TOOLS',
-    price: 'NPR 4,800 / Unit',
-    dosage: '16 Litre Capacity',
-    description: 'Rechargeable knapsack sprayer for foliar nutrient & pesticide application.',
-  },
-];
-
-const FALLBACK_SUBSIDIZED_PRODUCTS = [
-  {
-    id: 'sub-1',
-    title: 'Govt Subsidized Urea 46% N Fertilizer',
-    category: 'FERTILIZER',
-    original_price: 'NPR 2,200 / Bag',
-    subsidized_price: 'NPR 1,100 / Bag',
-    subsidy_percentage: 50,
-    unit: '50kg Bag',
-    emoji: '💧',
-    description: 'Nepalese Government 50% subsidized Urea fertilizer for nitrogen top-dressing.',
-  },
-  {
-    id: 'sub-2',
-    title: 'Govt Subsidized Hardinath-1 Paddy Seeds',
-    category: 'SEEDS',
-    original_price: 'NPR 1,800 / Pack',
-    subsidized_price: 'NPR 900 / Pack',
-    subsidy_percentage: 50,
-    unit: '10kg Pack',
-    emoji: '🌾',
-    description: '50% Govt subsidized NARC certified paddy seeds.',
-  },
-  {
-    id: 'sub-3',
-    title: 'Govt Subsidized DAP 18-46-0 Fertilizer',
-    category: 'FERTILIZER',
-    original_price: 'NPR 3,600 / Bag',
-    subsidized_price: 'NPR 2,400 / Bag',
-    subsidy_percentage: 33,
-    unit: '50kg Bag',
-    emoji: '🧪',
-    description: 'Government 33% subsidized DAP fertilizer for basal root nutrition.',
-  },
-  {
-    id: 'sub-4',
-    title: 'Govt Subsidized 16L Battery Knapsack Sprayer',
-    category: 'TOOLS',
-    original_price: 'NPR 8,000 / Unit',
-    subsidized_price: 'NPR 4,000 / Unit',
-    subsidy_percentage: 50,
-    unit: 'Unit',
-    emoji: '🎒',
-    description: '50% Govt subsidized rechargeable knapsack sprayer for crop protection.',
-  },
-];
+const FALLBACK_PRODUCTS: any[] = [];
+const FALLBACK_SUBSIDIZED_PRODUCTS: any[] = [];
 
 // Instant Checkout Overlay Modal Component
 function CheckoutDialogOverlay({
@@ -288,14 +189,20 @@ function CheckoutDialogOverlay({
   );
 }
 
+// Module-level RAM Cache for Instant 0ms Subsidies Load
+let cachedProducts: any[] = [];
+let cachedSubsidizedProducts: any[] = [];
+
 export default function MarketplaceScreen() {
   const navigation = useNavigation<any>();
   const { colors, isDarkMode } = useTheme();
   const { language } = useLanguage();
   const { addToCart, cartCount } = useCart();
+  const { avatarUrl, avatarSource } = useUserAvatar();
 
-  const [products, setProducts] = useState<any[]>(FALLBACK_PRODUCTS);
-  const [subsidizedProducts, setSubsidizedProducts] = useState<any[]>(FALLBACK_SUBSIDIZED_PRODUCTS);
+  const [products, setProducts] = useState<any[]>(cachedProducts);
+  const [subsidizedProducts, setSubsidizedProducts] = useState<any[]>(cachedSubsidizedProducts);
+  const [loadingData, setLoadingData] = useState(cachedProducts.length === 0);
   const [currentField, setCurrentField] = useState<any>(null);
 
   // Typewriter animation state for header
@@ -343,27 +250,90 @@ export default function MarketplaceScreen() {
     },
   ];
 
-  // Fetch products & subsidized products from Supabase database
+  // Fetch products & subsidized products from Supabase database + Realtime Listener
   useEffect(() => {
-    async function loadData() {
+    async function loadData(isInitial = false) {
+      if (isInitial && cachedProducts.length === 0) {
+        setLoadingData(true);
+      }
+
       try {
-        const { data: prodData } = await supabase.from('products' as any).select('*');
-        if (prodData && prodData.length > 0) {
-          setProducts(prodData);
+        const [mktRes, fieldRes] = await Promise.all([
+          supabase.from('marketplace_items' as any).select('*').order('created_at', { ascending: false }),
+          supabase.from('fields').select('*').limit(1)
+        ]);
+
+        const mktData = mktRes.data;
+        
+        if (mktData && mktData.length > 0) {
+          // Format all marketplace products
+          const formattedProducts = mktData.map((item: any) => ({
+            id: item.id,
+            emoji: item.category === 'Seeds' ? '🌾' : item.category === 'Fertilizer' ? '💧' : item.category === 'Pesticides' ? '🧪' : '🎒',
+            title: item.name,
+            name: item.name,
+            category: (item.category || 'OTHER').toUpperCase(),
+            price: `NPR ${item.price} / ${item.unit || 'Pack'}`,
+            dosage: item.unit || 'Standard Pack',
+            description: item.description || 'Chitwan Vet certified high yield agricultural supply.',
+            image_url: item.image_url,
+          }));
+
+          // Filter items with discount_percentage > 0 for Subsidized / Discounted section
+          const discountedItems = mktData
+            .filter((item: any) => Number(item.discount_percentage || 0) > 0)
+            .map((item: any) => {
+              const origPrice = item.original_price || Math.round(item.price * (1 + (item.discount_percentage || 0)/100));
+              return {
+                id: item.id,
+                title: item.name,
+                name: item.name,
+                category: (item.category || 'OTHER').toUpperCase(),
+                original_price: `NPR ${origPrice} / ${item.unit || 'Pack'}`,
+                subsidized_price: `NPR ${item.price} / ${item.unit || 'Pack'}`,
+                subsidy_percentage: item.discount_percentage,
+                unit: item.unit || 'Pack',
+                emoji: item.category === 'Seeds' ? '🌾' : item.category === 'Fertilizer' ? '💧' : item.category === 'Pesticides' ? '🧪' : '🎒',
+                description: item.description || 'Chitwan Vet Special Discounted Offer',
+                image_url: item.image_url,
+              };
+            });
+
+          cachedProducts = formattedProducts;
+          cachedSubsidizedProducts = discountedItems;
+
+          setProducts(formattedProducts);
+          setSubsidizedProducts(discountedItems);
+        } else {
+          cachedProducts = [];
+          cachedSubsidizedProducts = [];
+          setProducts([]);
+          setSubsidizedProducts([]);
         }
-        const { data: subData } = await supabase.from('subsidized_products' as any).select('*');
-        if (subData && subData.length > 0) {
-          setSubsidizedProducts(subData);
-        }
-        const { data: fieldData } = await supabase.from('fields').select('*').limit(1);
-        if (fieldData && fieldData.length > 0) {
-          setCurrentField(fieldData[0]);
+
+        if (fieldRes.data && fieldRes.data.length > 0) {
+          setCurrentField(fieldRes.data[0]);
         }
       } catch (e) {
         console.warn('Database load error:', e);
+      } finally {
+        setLoadingData(false);
       }
     }
-    loadData();
+
+    loadData(true);
+
+    // Realtime channel listener for instant background updates from Web Portal
+    const channel = supabase
+      .channel('mobile:marketplace_items')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'marketplace_items' }, () => {
+        loadData(false);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Typewriter effect logic
@@ -414,7 +384,11 @@ export default function MarketplaceScreen() {
     return () => clearTimeout(timer);
   }, [language]);
 
-  // Handle Buy Now button press
+  // Handle Add to Cart button press -> Adds item to cart context silently without modal popup
+  const handleAddToCart = (productItem: any) => {
+    addToCart(productItem, 1);
+  };
+
   const handleBuyNow = (productItem: any) => {
     setSelectedProduct(productItem);
     setCheckoutModalVisible(true);
@@ -425,6 +399,9 @@ export default function MarketplaceScreen() {
     if (!selectedProduct) return;
     setOrderProcessing(true);
 
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
+
     const pTitle = selectedProduct.title || selectedProduct.name || 'Certified Agricultural Input';
     const pCategory = selectedProduct.category || 'Seeds';
     const pDosage = selectedProduct.dosage || selectedProduct.unit || 'Standard Pack';
@@ -433,12 +410,19 @@ export default function MarketplaceScreen() {
     const orderNum = `ANV-${Math.floor(1000 + Math.random() * 9000)}`;
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      let farmerName = user?.user_metadata?.full_name || user?.user_metadata?.name || '';
+      if (!farmerName && user?.email) {
+        farmerName = user.email.split('@')[0];
+      }
+      if (!farmerName) {
+        farmerName = 'Ram Shrestha';
+      }
+      const farmerPhone = user?.user_metadata?.phone || user?.phone || '+977-9855012345';
 
       const orderPayload: any = {
         order_number: orderNum,
-        farmer_name: 'Chitwan Farmer',
-        farmer_phone: '+977-9800000000',
+        farmer_name: farmerName,
+        farmer_phone: farmerPhone,
         product_title: pTitle,
         product_category: pCategory,
         dosage: pDosage,
@@ -517,14 +501,11 @@ export default function MarketplaceScreen() {
             )}
           </TouchableOpacity>
           
-          <TouchableOpacity style={[styles.profileBtn, { borderColor: isDarkMode ? colors.brandGreen : COLORS.forest600 }]} activeOpacity={0.7}>
-            <Image 
-              source={AVATAR_PEEKING} 
-              style={styles.profilePic} 
-              resizeMode="cover"
-              fadeDuration={0}
-            />
-          </TouchableOpacity>
+          <UserProfileIcon
+            size={36}
+            borderColor={isDarkMode ? colors.brandGreen : COLORS.forest600}
+            onPress={() => navigation.navigate('SettingsTab' as any)}
+          />
         </View>
       </View>
 
@@ -621,12 +602,14 @@ export default function MarketplaceScreen() {
                 activeOpacity={0.88}
                 style={styles.featuredProductCardWrapper}
               >
-                <Image 
-                  source={getCardImageSource(item)} 
-                  style={styles.featuredCardBgImage}
-                  resizeMode="cover"
-                  fadeDuration={0}
-                />
+                {getCardImageSource(item) && (
+                  <Image 
+                    source={getCardImageSource(item)} 
+                    style={styles.featuredCardBgImage}
+                    resizeMode="cover"
+                    fadeDuration={0}
+                  />
+                )}
                 <LinearGradient
                   colors={['rgba(0,0,0,0.35)', 'rgba(0,0,0,0.92)']}
                   style={styles.featuredCardOverlay}
@@ -649,13 +632,13 @@ export default function MarketplaceScreen() {
                     </Text>
 
                     <TouchableOpacity 
-                      onPress={() => handleBuyNow(item)}
+                      onPress={() => handleAddToCart(item)}
                       style={[styles.buyBtnGlassRight, { backgroundColor: colors.brandGreen }]}
                       activeOpacity={0.8}
                     >
                       <Ionicons name="cart" size={14} color="#fff" />
                       <Text style={styles.buyBtnGlassText}>
-                        {language === 'ne' ? 'अर्डर गर्नुहोस्' : 'Buy Now'}
+                        {language === 'ne' ? '+ कार्ट' : '+ Cart'}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -687,67 +670,93 @@ export default function MarketplaceScreen() {
             </TouchableOpacity>
           </View>
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 16 }}>
-            {subsidizedProducts.map((item) => (
-              <TouchableOpacity 
-                key={item.id} 
-                onPress={() => navigation.navigate('ProductDetail', { product: { ...item, price: item.subsidized_price } })}
-                activeOpacity={0.88}
-                style={styles.featuredProductCardWrapper}
-              >
-                <Image 
-                  source={getCategoryBg(item.category)} 
-                  style={styles.featuredCardBgImage}
-                  resizeMode="cover"
-                  fadeDuration={0}
-                />
-                <LinearGradient
-                  colors={['rgba(0,0,0,0.35)', 'rgba(0,0,0,0.92)']}
-                  style={styles.featuredCardOverlay}
+          {loadingData ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 16 }}>
+              {[1, 2, 3].map((key) => (
+                <View key={key} style={[styles.skeletonCardWrapper, { backgroundColor: isDarkMode ? '#1a291f' : '#e6e3d8' }]}>
+                  <ActivityIndicator color={isDarkMode ? '#81c784' : COLORS.forest700} style={{ marginTop: 70 }} />
+                </View>
+              ))}
+            </ScrollView>
+          ) : subsidizedProducts.length === 0 ? (
+            <View style={[styles.emptySubsidiesCard, { backgroundColor: isDarkMode ? '#1a291f' : '#ffffff', borderColor: isDarkMode ? '#2d4d37' : '#e0ece3' }]}>
+              <View style={[styles.emptySubsidiesIconCircle, { backgroundColor: isDarkMode ? '#243626' : '#eaf6ef' }]}>
+                <Ionicons name="pricetag-outline" size={26} color={isDarkMode ? '#81c784' : COLORS.forest700} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.emptySubsidiesTitle, { color: isDarkMode ? colors.text : COLORS.ink }]}>
+                  {language === 'ne' ? 'हाल कुनै अनुदानित सामग्री उपलब्ध छैन' : 'No Subsidized Offers Currently Active'}
+                </Text>
+                <Text style={[styles.emptySubsidiesSub, { color: colors.secondaryText }]}>
+                  {language === 'ne' ? 'एग्रोभेटले नयाँ छुट लागू गर्दा यहाँ तुरुन्त देखिनेछ।' : 'Special Agrovet discounts applied on the web portal will appear here in real time.'}
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 16 }}>
+              {subsidizedProducts.map((item) => (
+                <TouchableOpacity 
+                  key={item.id} 
+                  onPress={() => navigation.navigate('ProductDetail', { product: { ...item, price: item.subsidized_price } })}
+                  activeOpacity={0.88}
+                  style={styles.featuredProductCardWrapper}
                 >
-                  {/* Top Row: Subsidy Badge Pill & Emoji */}
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <View style={styles.subsidyBadgePill}>
-                      <Text style={styles.subsidyBadgePillText}>
-                        {item.subsidy_percentage}% {language === 'ne' ? 'अनुदान' : 'GOVT SUBSIDY'}
-                      </Text>
-                    </View>
-                    <Text style={{ fontSize: 24 }}>{item.emoji}</Text>
-                  </View>
-
-                  {/* Title */}
-                  <Text style={styles.featuredCardTitle} numberOfLines={2}>
-                    {item.title}
-                  </Text>
-
-                  {/* Price & Buy Now Row */}
-                  <View style={{ marginTop: 'auto' }}>
-                    {/* Row 1: Original Price Strikethrough & Subsidized Price */}
-                    <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6, marginBottom: 6 }}>
-                      <Text style={styles.originalPriceText}>
-                        {item.original_price}
-                      </Text>
-                      <Text style={{ color: '#81c784', fontSize: 14.5, fontWeight: '900' }}>
-                        {item.subsidized_price}
-                      </Text>
+                  {getCardImageSource(item) && (
+                    <Image 
+                      source={getCardImageSource(item)} 
+                      style={styles.featuredCardBgImage}
+                      resizeMode="cover"
+                      fadeDuration={0}
+                    />
+                  )}
+                  <LinearGradient
+                    colors={['rgba(0,0,0,0.35)', 'rgba(0,0,0,0.92)']}
+                    style={styles.featuredCardOverlay}
+                  >
+                    {/* Top Row: Subsidy Badge Pill & Emoji */}
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <View style={styles.subsidyBadgePill}>
+                        <Text style={styles.subsidyBadgePillText}>
+                          {item.subsidy_percentage}% {language === 'ne' ? 'अनुदान' : 'GOVT SUBSIDY'}
+                        </Text>
+                      </View>
+                      <Text style={{ fontSize: 24 }}>{item.emoji}</Text>
                     </View>
 
-                    {/* Row 2: Buy Now Button on Right-Hand Side */}
-                    <TouchableOpacity 
-                      onPress={() => handleBuyNow({ ...item, price: item.subsidized_price })}
-                      style={[styles.buyBtnGlassRight, { backgroundColor: '#d97706' }]}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons name="cart" size={14} color="#fff" />
-                      <Text style={styles.buyBtnGlassText}>
-                        {language === 'ne' ? 'अर्डर गर्नुहोस्' : 'Buy Now'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </LinearGradient>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+                    {/* Title */}
+                    <Text style={styles.featuredCardTitle} numberOfLines={2}>
+                      {item.title}
+                    </Text>
+
+                    {/* Price & Buy Now Row */}
+                    <View style={{ marginTop: 'auto' }}>
+                      {/* Stacked Rows for Price to Prevent Text Cutoff */}
+                      <View style={{ marginBottom: 6 }}>
+                        <Text style={[styles.originalPriceText, { fontSize: 11, marginBottom: 1 }]}>
+                          {item.original_price}
+                        </Text>
+                        <Text style={{ color: '#81c784', fontSize: 15, fontWeight: '900' }}>
+                          {item.subsidized_price}
+                        </Text>
+                      </View>
+
+                      {/* Row 2: Buy Now Button on Right-Hand Side */}
+                      <TouchableOpacity 
+                        onPress={() => handleAddToCart({ ...item, price: item.subsidized_price })}
+                        style={[styles.buyBtnGlassRight, { backgroundColor: '#d97706' }]}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="cart" size={14} color="#fff" />
+                        <Text style={styles.buyBtnGlassText}>
+                          {language === 'ne' ? '+ कार्ट' : '+ Cart'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </LinearGradient>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
         </View>
       </ScrollView>
 
@@ -768,6 +777,7 @@ export default function MarketplaceScreen() {
       <CartModal
         visible={cartModalVisible}
         onClose={() => setCartModalVisible(false)}
+        onOrderSuccess={() => navigation.navigate('Settings', { openOrderTracking: true })}
       />
     </SafeAreaView>
   );
@@ -953,14 +963,14 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 10,
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
   },
   buyBtnGlassText: {
     color: '#ffffff',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
   },
 
@@ -1153,5 +1163,38 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 13.5,
     fontWeight: '800',
+  },
+  emptySubsidiesCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginRight: 16,
+    marginTop: 4,
+  },
+  emptySubsidiesIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptySubsidiesTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  emptySubsidiesSub: {
+    fontSize: 11,
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  skeletonCardWrapper: {
+    width: 200,
+    height: 220,
+    borderRadius: 20,
+    marginRight: 14,
+    opacity: 0.6,
   },
 });
